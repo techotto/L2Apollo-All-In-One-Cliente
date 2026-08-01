@@ -5,6 +5,7 @@
     "folder": "L2Apollo-All-In-One",
     "binPrefix": "LApolloAllInOne",
     "ipcSlug": "allinone",
-    "hasConfigs": true
+    "hasConfigs": true,
+    "clientGitUrl": "https://github.com/techotto/L2Apollo-All-In-One-Cliente.git"
   }
 ]

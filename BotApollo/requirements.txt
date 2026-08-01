@@ -1,4 +1,0 @@
-opencv-python
-mss
-numpy
-pyserial
