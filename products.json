@@ -1,0 +1,10 @@
+[
+  {
+    "id": "l2ApolloAllInOne",
+    "label": "L2Apollo — All-In-One",
+    "folder": "L2Apollo-All-In-One",
+    "binPrefix": "LApolloAllInOne",
+    "ipcSlug": "allinone",
+    "hasConfigs": true
+  }
+]
