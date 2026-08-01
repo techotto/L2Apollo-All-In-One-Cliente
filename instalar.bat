@@ -18,6 +18,14 @@ if not exist "%BOOT%" (
   exit /b 1
 )
 
+REM config\ local a partir dos defaults (se ainda nao existir)
+if exist "%ROOT%\config.default\" (
+  if not exist "%ROOT%\config\" mkdir "%ROOT%\config\" >nul 2>&1
+  for %%F in ("%ROOT%\config.default\*.ini") do (
+    if not exist "%ROOT%\config\%%~nxF" copy /Y "%%F" "%ROOT%\config\%%~nxF" >nul
+  )
+)
+
 echo.
 set "KEY="
 set /p "KEY=Informe sua KEY: "

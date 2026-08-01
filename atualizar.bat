@@ -8,7 +8,7 @@ echo ============================================================
 echo   L2 APOLLO - Atualizar (git pull)
 echo ============================================================
 echo.
-echo  Sua pasta config\ sera PRESERVADA (INIs locais nao sobrescritos).
+echo  config\ e local (gitignore) - seus INIs nao entram no git.
 echo.
 
 where git >nul 2>&1
@@ -28,17 +28,14 @@ if not exist "%~dp0.git\" (
 )
 
 set "CFG=%~dp0config"
+set "CFGDEF=%~dp0config.default"
 set "CFGBAK=%TEMP%\l2apollo-config-bak-%RANDOM%%RANDOM%"
 
+REM Backup: na 1a atualizacao o git ainda pode remover config\ antigo do indice.
 if exist "%CFG\" (
   echo [..] Salvando config\ local...
   mkdir "%CFGBAK%" >nul 2>&1
   xcopy "%CFG\*" "%CFGBAK\" /E /I /Y /Q >nul
-  if errorlevel 1 (
-    echo [ERRO] Falha ao copiar config\ para backup.
-    pause
-    exit /b 1
-  )
 )
 
 echo [..] git pull...
@@ -63,6 +60,14 @@ if exist "%CFGBAK\" (
   xcopy "%CFGBAK\*" "%CFG\" /E /I /Y /Q >nul
   rmdir /S /Q "%CFGBAK%" >nul 2>&1
   echo [OK] config\ preservada.
+)
+
+REM Defaults novos (ini que ainda nao existe no cliente)
+if exist "%CFGDEF\" (
+  if not exist "%CFG\" mkdir "%CFG%" >nul 2>&1
+  for %%F in ("%CFGDEF%\*.ini") do (
+    if not exist "%CFG%\%%~nxF" copy /Y "%%F" "%CFG%\%%~nxF" >nul
+  )
 )
 
 echo.

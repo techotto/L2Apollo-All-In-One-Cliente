@@ -1,0 +1,9 @@
+# Config local do cliente - NAO versionar (cada um tem a sua)
+config/
+
+# Licenca / runtime local
+helper.live
+hwid.local
+keys.txt
+token.txt
+*.remote

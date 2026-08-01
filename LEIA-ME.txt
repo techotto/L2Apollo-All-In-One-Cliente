@@ -5,6 +5,7 @@ COMO OBTER / ATUALIZAR
 - Clone: git clone https://github.com/techotto/L2Apollo-All-In-One-Cliente.git
 - Atualizar: rode atualizar.bat (git pull) nesta pasta
 - O atualizar.bat PRESERVA sua pasta config\ (INIs locais)
+- config\ NAO vai pro git; defaults ficam em config.default\
 - Se veio em ZIP: baixe o ZIP novo e substitua a pasta (faca backup do config\)
 
 COMO INSTALAR
@@ -29,7 +30,8 @@ COMO USAR
 
 CONFIGURACAO
 - Edite os arquivos .ini na pasta config\ conforme necessario
-- Ao atualizar com atualizar.bat, esses INIs NAO sao sobrescritos
+- config\ e sua (local). Defaults do pacote: config.default\
+- Ao atualizar, seus INIs NAO sao sobrescritos
 
 COMO DESINSTALAR
 - Rode desinstalar.bat
