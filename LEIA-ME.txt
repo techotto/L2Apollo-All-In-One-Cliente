@@ -3,9 +3,9 @@ L2 APOLLO - L2Apollo ? All-In-One - Pacote do Cliente
 
 COMO OBTER / ATUALIZAR
 - Clone: git clone https://github.com/techotto/L2Apollo-All-In-One-Cliente.git
-- Atualizar: rode atualizar.bat (git pull) nesta pasta
-- O atualizar.bat PRESERVA sua pasta config\ (INIs locais)
-- config\ NAO vai pro git; defaults ficam em config.default\
+- Atualizar: so dar dois cliques em atualizar.bat
+- O bat baixa a versao nova e PRESERVA sua pasta config\
+- config\ e local; defaults do pacote ficam em config.default\
 - Se veio em ZIP: baixe o ZIP novo e substitua a pasta (faca backup do config\)
 
 COMO INSTALAR
