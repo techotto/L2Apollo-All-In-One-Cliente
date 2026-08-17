@@ -1,17 +1,6 @@
 # Config local do cliente - NAO versionar (cada um tem a sua)
 config/
 
-# NUNCA versionar fonte Pascal/C++
-*.pas
-*.pp
-*.inc
-*.lpr
-*.lpi
-*.dpr
-*.cpp
-*.h
-src/
-
 # Licenca / runtime local
 helper.live
 hwid.local
