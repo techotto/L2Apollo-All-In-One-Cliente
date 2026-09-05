@@ -1,24 +1,48 @@
-# =============================================================================
-# BotApollo - regras condicionais (opcional)
-# =============================================================================
-# Se este arquivo existir como "rules.conf", o bot usa ESTE modo e ignora
-# IMAGE_FILE do config.conf.
-#
-# Formato (uma regra por linha):
-#   images/condicao.png -> images/alvo.png
-#   images/condicao.png -> images/alvo.png | 0.85
-#
-# - condicao : imagem que precisa APARECER na tela
-# - alvo     : imagem onde o bot vai CLICAR (busca na tela inteira)
-# - @self    : clica no centro da propria condicao (modo antigo)
-# - | 0.85   : confianca minima so desta regra (opcional)
-#
-# As regras sao testadas em ordem. A primeira condicao que bater tenta clicar.
-# Coloque todos os PNGs em images\
-# =============================================================================
-
-# Exemplo: popup apareceu -> clica no botao OK
-# images/popup.png -> images/botao_ok.png
-
-# Exemplo: mesma imagem (compativel com o modo simples antigo)
-# images/imagem.png -> @self
+# =============================================================================
+
+# BotApollo - regras condicionais (opcional)
+
+# =============================================================================
+
+# Se este arquivo existir como "rules.conf", o bot usa ESTE modo e ignora
+
+# IMAGE_FILE do config.conf.
+
+#
+
+# Formato (uma regra por linha):
+
+#   images/condicao.png -> images/alvo.png
+
+#   images/condicao.png -> images/alvo.png | 0.85
+
+#
+
+# - condicao : imagem que precisa APARECER na tela
+
+# - alvo     : imagem onde o bot vai CLICAR (busca na tela inteira)
+
+# - @self    : clica no centro da propria condicao (modo antigo)
+
+# - | 0.85   : confianca minima so desta regra (opcional)
+
+#
+
+# As regras sao testadas em ordem. A primeira condicao que bater tenta clicar.
+
+# Coloque todos os PNGs em images\
+
+# =============================================================================
+
+
+
+# Exemplo: popup apareceu -> clica no botao OK
+
+# images/popup.png -> images/botao_ok.png
+
+
+
+# Exemplo: mesma imagem (compativel com o modo simples antigo)
+
+# images/imagem.png -> @self
+
