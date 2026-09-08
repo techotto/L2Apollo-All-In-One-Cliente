@@ -23,10 +23,15 @@ if errorlevel 1 (
     )
 )
 
-echo Iniciando ApolloBot...
+:loop
+echo.
+echo [%date% %time%] Iniciando ApolloBot...
 echo.
 python main.py
+set EXITCODE=%ERRORLEVEL%
 
 echo.
-echo ApolloBot encerrado.
-pause
+echo [%date% %time%] ApolloBot caiu (codigo %EXITCODE%). Reiniciando em 3s...
+echo Pressione Ctrl+C agora se quiser parar de verdade.
+timeout /t 3 /nobreak >nul
+goto loop
