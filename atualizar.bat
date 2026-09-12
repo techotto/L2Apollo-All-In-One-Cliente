@@ -9,7 +9,13 @@ echo   L2 APOLLO - Atualizar
 echo ============================================================
 echo.
 echo  Pasta: %CD%
-echo  So clicar aqui. Seus INIs em config\ sao preservados.
+echo.
+echo  Este bat SOBRESCREVE tudo igual ao GitHub
+echo  (.enc, DLL, exe, runtime, atualizar.bat...).
+echo  NAO usa "git pull" - sem conflito / merge.
+echo  So PRESERVA: pasta config\ + keys/token/helper/hwid.
+echo.
+echo  Feche o Adrenaline/painel se puder (DLL em uso trava update).
 echo  A janela NAO fecha sozinha - leia o log ate o final.
 echo.
 
@@ -33,7 +39,7 @@ set "CFGBAK=%TEMP%\l2apollo-config-bak-%RANDOM%%RANDOM%"
 set "LICBAK=%TEMP%\l2apollo-lic-bak-%RANDOM%%RANDOM%"
 set "ERR=0"
 
-echo [1/4] Salvando sua config\ e licenca...
+echo [1/5] Salvando sua config\ e licenca...
 mkdir "%CFGBAK%" >nul 2>&1
 mkdir "%LICBAK%" >nul 2>&1
 if exist "%CFG\" (
@@ -48,8 +54,15 @@ if exist "%~dp0helper.live" copy /Y "%~dp0helper.live" "%LICBAK%\helper.live" >n
 if exist "%~dp0hwid.local" copy /Y "%~dp0hwid.local" "%LICBAK%\hwid.local" >nul
 echo.
 
-echo [2/4] Baixando versao nova do GitHub...
-git fetch origin
+echo [2/5] Liberando arquivos travados (painel)...
+taskkill /F /IM L2ApolloPanel.exe >nul 2>&1
+taskkill /F /IM L2Apollo.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
+echo       ok
+echo.
+
+echo [3/5] Baixando versao nova do GitHub...
+git fetch --prune origin
 if errorlevel 1 (
   echo [ERRO] Nao consegui baixar do GitHub (rede/git).
   set "ERR=1"
@@ -58,25 +71,49 @@ if errorlevel 1 (
 echo       fetch OK
 echo.
 
-echo [3/4] Aplicando update (.enc / exe / runtime)...
-echo       Isso ignora conflito de config\ local (buffer.ini etc).
-git reset --hard origin/main
+echo [4/5] Forcando pacote = GitHub (descarta DLL/.enc locais)...
+REM Cancela merge/rebase/pull pela metade (origem do conflito)
+git merge --abort >nul 2>&1
+git rebase --abort >nul 2>&1
+git cherry-pick --abort >nul 2>&1
+git am --abort >nul 2>&1
+
+REM Descarta qualquer alteracao local em arquivos versionados
+git reset --hard HEAD >nul 2>&1
+git clean -fd >nul 2>&1
+
+REM Garante branch main apontando pro remoto (sem merge)
+git checkout -B main origin/main
 if errorlevel 1 (
-  echo [ERRO] Falha ao aplicar update.
+  echo       checkout -B falhou; tentando reset --hard...
+  git reset --hard origin/main
+)
+if errorlevel 1 (
+  echo [ERRO] Falha ao aplicar update (arquivo em uso?).
+  echo        Feche Adrenaline/painel e rode de novo.
   set "ERR=1"
   goto RESTORE
 )
+
+git reset --hard origin/main
+if errorlevel 1 (
+  echo [ERRO] Falha no reset final.
+  set "ERR=1"
+  goto RESTORE
+)
+
+REM Remove lixo nao versionado (NAO apaga config\ - esta no .gitignore)
 git clean -fd
-echo       reset OK
+echo       reset OK - igual ao repositorio
 git log -1 --oneline
 echo.
 
-echo [4/4] Restaurando sua config\ e licenca...
+echo [5/5] Restaurando sua config\ e licenca...
 :RESTORE
 if not exist "%CFG\" mkdir "%CFG%" >nul 2>&1
 if exist "%CFGBAK%\" (
   xcopy "%CFGBAK%\*" "%CFG\" /E /I /Y /Q
-  echo       config\ restaurada
+  echo       config\ restaurada (seus INIs)
 ) else (
   echo       (sem backup de config)
 )
@@ -102,10 +139,11 @@ if "%ERR%"=="1" goto END_FAIL
 
 echo.
 echo ============================================================
-echo   OK - Pacote atualizado.
+echo   OK - Pacote igual ao GitHub.
 echo   Seus INIs em config\ foram mantidos.
 echo.
-echo   Agora: pare o script no Adrenaline, abra o .enc de novo (F9).
+echo   Agora: abra o .enc de novo no Adrenaline (F9).
+echo   Nao use "git pull" nesta pasta - so este bat.
 echo ============================================================
 goto END_OK
 
