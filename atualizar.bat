@@ -9,143 +9,32 @@ echo   L2 APOLLO - Atualizar
 echo ============================================================
 echo.
 echo  Pasta: %CD%
-echo.
-echo  Este bat SOBRESCREVE tudo igual ao GitHub
-echo  (.enc, DLL, exe, runtime, atualizar.bat...).
-echo  NAO usa "git pull" - sem conflito / merge.
-echo  So PRESERVA: pasta config\ + keys/token/helper/hwid.
-echo.
-echo  Feche o Adrenaline/painel se puder (DLL em uso trava update).
-echo  A janela NAO fecha sozinha - leia o log ate o final.
+echo  Vai: achar quem trava .enc/DLL, matar, baixar GitHub,
+echo       sobrescrever TUDO menos config\ + licenca.
+echo  A janela NAO fecha sozinha.
 echo.
 
-where git >nul 2>&1
+where powershell >nul 2>&1
 if errorlevel 1 (
-  echo [ERRO] Git nao encontrado no PATH.
-  echo        Instale o Git for Windows e tente de novo.
+  echo [ERRO] PowerShell nao encontrado.
+  goto END_FAIL
+)
+if not exist "%~dp0atualizar-core.ps1" (
+  echo [ERRO] Falta atualizar-core.ps1 nesta pasta.
+  echo        Rode o update uma vez via suporte / reclone.
   goto END_FAIL
 )
 
-if not exist "%~dp0.git\" (
-  echo [ERRO] Esta pasta nao e um repositorio Git.
-  echo        Clone o pacote com:
-  echo          git clone https://github.com/techotto/L2Apollo-All-In-One-Cliente.git
-  goto END_FAIL
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0atualizar-core.ps1"
+set "ERR=%ERRORLEVEL%"
 
-set "CFG=%~dp0config"
-set "CFGDEF=%~dp0config.default"
-set "CFGBAK=%TEMP%\l2apollo-config-bak-%RANDOM%%RANDOM%"
-set "LICBAK=%TEMP%\l2apollo-lic-bak-%RANDOM%%RANDOM%"
-set "ERR=0"
-
-echo [1/5] Salvando sua config\ e licenca...
-mkdir "%CFGBAK%" >nul 2>&1
-mkdir "%LICBAK%" >nul 2>&1
-if exist "%CFG\" (
-  xcopy "%CFG\*" "%CFGBAK\" /E /I /Y /Q
-  echo       config\ salva em backup temporario
-) else (
-  echo       (ainda nao tinha config\)
-)
-if exist "%~dp0keys.txt" copy /Y "%~dp0keys.txt" "%LICBAK%\keys.txt" >nul
-if exist "%~dp0token.txt" copy /Y "%~dp0token.txt" "%LICBAK%\token.txt" >nul
-if exist "%~dp0helper.live" copy /Y "%~dp0helper.live" "%LICBAK%\helper.live" >nul
-if exist "%~dp0hwid.local" copy /Y "%~dp0hwid.local" "%LICBAK%\hwid.local" >nul
-echo.
-
-echo [2/5] Liberando arquivos travados (painel)...
-taskkill /F /IM L2ApolloPanel.exe >nul 2>&1
-taskkill /F /IM L2Apollo.exe >nul 2>&1
-timeout /t 1 /nobreak >nul
-echo       ok
-echo.
-
-echo [3/5] Baixando versao nova do GitHub...
-git fetch --prune origin
-if errorlevel 1 (
-  echo [ERRO] Nao consegui baixar do GitHub (rede/git).
-  set "ERR=1"
-  goto RESTORE
-)
-echo       fetch OK
-echo.
-
-echo [4/5] Forcando pacote = GitHub (descarta DLL/.enc locais)...
-REM Cancela merge/rebase/pull pela metade (origem do conflito)
-git merge --abort >nul 2>&1
-git rebase --abort >nul 2>&1
-git cherry-pick --abort >nul 2>&1
-git am --abort >nul 2>&1
-
-REM Descarta qualquer alteracao local em arquivos versionados
-git reset --hard HEAD >nul 2>&1
-git clean -fd >nul 2>&1
-
-REM Garante branch main apontando pro remoto (sem merge)
-git checkout -B main origin/main
-if errorlevel 1 (
-  echo       checkout -B falhou; tentando reset --hard...
-  git reset --hard origin/main
-)
-if errorlevel 1 (
-  echo [ERRO] Falha ao aplicar update (arquivo em uso?).
-  echo        Feche Adrenaline/painel e rode de novo.
-  set "ERR=1"
-  goto RESTORE
-)
-
-git reset --hard origin/main
-if errorlevel 1 (
-  echo [ERRO] Falha no reset final.
-  set "ERR=1"
-  goto RESTORE
-)
-
-REM Remove lixo nao versionado (NAO apaga config\ - esta no .gitignore)
-git clean -fd
-echo       reset OK - igual ao repositorio
-git log -1 --oneline
-echo.
-
-echo [5/5] Restaurando sua config\ e licenca...
-:RESTORE
-if not exist "%CFG\" mkdir "%CFG%" >nul 2>&1
-if exist "%CFGBAK%\" (
-  xcopy "%CFGBAK%\*" "%CFG\" /E /I /Y /Q
-  echo       config\ restaurada (seus INIs)
-) else (
-  echo       (sem backup de config)
-)
-if exist "%LICBAK%\keys.txt" copy /Y "%LICBAK%\keys.txt" "%~dp0keys.txt" >nul
-if exist "%LICBAK%\token.txt" copy /Y "%LICBAK%\token.txt" "%~dp0token.txt" >nul
-if exist "%LICBAK%\helper.live" copy /Y "%LICBAK%\helper.live" "%~dp0helper.live" >nul
-if exist "%LICBAK%\hwid.local" copy /Y "%LICBAK%\hwid.local" "%~dp0hwid.local" >nul
-
-if exist "%CFGDEF\" (
-  echo       completando INIs faltantes a partir de config.default\
-  for %%F in ("%CFGDEF%\*.ini") do (
-    if not exist "%CFG%\%%~nxF" (
-      copy /Y "%%F" "%CFG%\%%~nxF" >nul
-      echo         + %%~nxF
-    )
-  )
-)
-
-if exist "%CFGBAK%" rmdir /S /Q "%CFGBAK%" >nul 2>&1
-if exist "%LICBAK%" rmdir /S /Q "%LICBAK%" >nul 2>&1
-
-if "%ERR%"=="1" goto END_FAIL
+if not "%ERR%"=="0" goto END_FAIL
 
 echo.
-echo ============================================================
-echo   OK - Pacote igual ao GitHub.
-echo   Seus INIs em config\ foram mantidos.
-echo.
-echo   Agora: abra o .enc de novo no Adrenaline (F9).
-echo   Nao use "git pull" nesta pasta - so este bat.
-echo ============================================================
-goto END_OK
+echo Pressione qualquer tecla para fechar...
+pause >nul
+endlocal
+exit /b 0
 
 :END_FAIL
 echo.
@@ -155,14 +44,5 @@ echo ============================================================
 echo.
 echo Pressione qualquer tecla para fechar...
 pause >nul
-echo.
 endlocal
 exit /b 1
-
-:END_OK
-echo.
-echo Pressione qualquer tecla para fechar...
-pause >nul
-echo.
-endlocal
-exit /b 0
