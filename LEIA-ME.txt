@@ -5,9 +5,10 @@ COMO OBTER / ATUALIZAR
 - Clone: git clone https://github.com/techotto/L2Apollo-All-In-One-Cliente.git
 - Atualizar: SO atualizar.bat (dois cliques). NAO use git pull
 - O bat detecta quem trava .enc/DLL, mata o processo e sobrescreve o pacote
-- PRESERVA so a pasta config e keys/token/helper
+- PRESERVA config\ + BotApollo\config.conf + keys/token/helper
 - Mostra SUCESSO ou FALHOU no final (commit, tamanho do .enc)
 - config\ e local; defaults do pacote ficam em config.default\
+- BotApollo\config.conf e local (porta COM). Template: config.conf.example
 - Se veio em ZIP: baixe o ZIP novo e substitua a pasta (faca backup do config\)
 
 COMO INSTALAR
@@ -34,6 +35,7 @@ CONFIGURACAO
 - Edite os arquivos .ini na pasta config\ conforme necessario
 - config\ e sua (local). Defaults do pacote: config.default\
 - Ao atualizar, seus INIs NAO sao sobrescritos
+- Ao atualizar, BotApollo\config.conf NAO e sobrescrito
 
 COMO DESINSTALAR
 - Rode desinstalar.bat

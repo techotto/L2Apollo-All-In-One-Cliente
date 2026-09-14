@@ -10,7 +10,7 @@ echo ============================================================
 echo.
 echo  Pasta: %CD%
 echo  Vai: achar quem trava .enc/DLL, matar, baixar GitHub,
-echo       sobrescrever TUDO menos config\ + licenca.
+echo       sobrescrever TUDO menos config\ + BotApollo\config.conf + licenca.
 echo  A janela NAO fecha sozinha.
 echo.
 
