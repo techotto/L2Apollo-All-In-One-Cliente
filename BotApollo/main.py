@@ -17,6 +17,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 IMAGES_DIR = SCRIPT_DIR / "images"
 CONFIG_FILE = SCRIPT_DIR / "config.conf"
 DEFAULT_RULES_FILE = SCRIPT_DIR / "rules.conf"
+FIXED_FLAG = Path(r"C:\Users\Public\l2apollo.botapollo.fixed")
 MOUSE_SCALE = 32767
 CLICK_SELF = "@self"
 
@@ -259,6 +260,24 @@ def evaluate_rule(
     return when_match, click_match
 
 
+def is_fixed_rule(rule: Rule) -> bool:
+    label = f"{rule.when_label} {rule.click_label}".lower()
+    return "fixed" in label
+
+
+def ordered_rules_for_tick(rules: list[Rule]) -> list[Rule]:
+    """
+    Fixed so roda quando o script Delphi emitir o pedido
+    (arquivo C:\\Users\\Public\\l2apollo.botapollo.fixed).
+    Sem o sinal: ignora regras Fixed (morte no meio do evento nao clica).
+    """
+    fixed_rules = [r for r in rules if is_fixed_rule(r)]
+    other_rules = [r for r in rules if not is_fixed_rule(r)]
+    if FIXED_FLAG.is_file():
+        return fixed_rules + other_rules
+    return other_rules
+
+
 def main() -> int:
     config = load_config()
     port = config.get("ARDUINO_PORT", "COM7")
@@ -307,8 +326,12 @@ def main() -> int:
                 screen = cv2.cvtColor(shot, cv2.COLOR_BGRA2BGR)
                 now = time.monotonic()
 
-                if now - last_click >= click_cooldown:
-                    for rule in rules:
+                active_rules = ordered_rules_for_tick(rules)
+                effective_cooldown = (
+                    min(click_cooldown, 0.35) if FIXED_FLAG.is_file() else click_cooldown
+                )
+                if now - last_click >= effective_cooldown:
+                    for rule in active_rules:
                         when_match, click_match = evaluate_rule(
                             screen,
                             monitor,
@@ -326,7 +349,6 @@ def main() -> int:
                             )
                             break
 
-                        threshold = rule_threshold(rule, default_threshold)
                         try:
                             if rule.click_template is None:
                                 send_click(
