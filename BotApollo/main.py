@@ -930,6 +930,69 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
+        # Uma instancia so: se ja tiver Robo desta pasta, mata e sobe o novo.
+        import atexit
+        import os
+
+        logs = SCRIPT_DIR / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        pid_path = logs / "robo.pid"
+
+        def _pid_alive(pid: int) -> bool:
+            if pid <= 0:
+                return False
+            try:
+                import ctypes
+
+                SYNCHRONIZE = 0x00100000
+                h = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+                if h:
+                    ctypes.windll.kernel32.CloseHandle(h)
+                    return True
+            except Exception:
+                pass
+            try:
+                os.kill(pid, 0)
+                return True
+            except OSError:
+                return False
+
+        if pid_path.is_file():
+            try:
+                old = int(pid_path.read_text(encoding="utf-8").strip() or "0")
+            except ValueError:
+                old = 0
+            if old and old != os.getpid() and _pid_alive(old):
+                try:
+                    import ctypes
+
+                    PROCESS_TERMINATE = 0x0001
+                    handle = ctypes.windll.kernel32.OpenProcess(
+                        PROCESS_TERMINATE, False, old
+                    )
+                    if handle:
+                        ctypes.windll.kernel32.TerminateProcess(handle, 1)
+                        ctypes.windll.kernel32.CloseHandle(handle)
+                except Exception:
+                    try:
+                        os.kill(old, 9)
+                    except OSError:
+                        pass
+                time.sleep(0.3)
+
+        pid_path.write_text(str(os.getpid()), encoding="utf-8")
+
+        def _clear_pid() -> None:
+            try:
+                if pid_path.is_file() and pid_path.read_text(encoding="utf-8").strip() == str(
+                    os.getpid()
+                ):
+                    pid_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        atexit.register(_clear_pid)
+
         sys.exit(main())
     except Exception as exc:
         print(f"ERRO inesperado: {exc}", flush=True)

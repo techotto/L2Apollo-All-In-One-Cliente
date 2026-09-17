@@ -69,6 +69,50 @@ if (-not (Test-Path -LiteralPath $main)) {
 Write-Log "Python=$py"
 Write-Log "Main=$main"
 
+function Stop-PreviousBotApollo {
+    $myPid = $PID
+    $mainLeaf = [IO.Path]::GetFileName($main)
+    $dirNorm = $dir.TrimEnd('\')
+
+    # 1) Outros restart-watch desta pasta (exceto este)
+    try {
+        Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ProcessId -ne $myPid -and
+                $_.CommandLine -and
+                ($_.CommandLine -like '*restart-watch.ps1*') -and
+                ($_.CommandLine -like ("*{0}*" -f $dirNorm))
+            } |
+            ForEach-Object {
+                Write-Log ("Matando watch antigo PID={0}" -f $_.ProcessId)
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+    } catch { }
+
+    # 2) python/pythonw rodando este main.py
+    try {
+        Get-CimInstance Win32_Process -Filter "Name = 'python.exe' OR Name = 'pythonw.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.CommandLine -and
+                (
+                    ($_.CommandLine -like ("*{0}*" -f $main)) -or
+                    (
+                        ($_.CommandLine -like ("*{0}*" -f $mainLeaf)) -and
+                        ($_.CommandLine -like ("*{0}*" -f $dirNorm))
+                    )
+                )
+            } |
+            ForEach-Object {
+                Write-Log ("Matando Robo antigo PID={0}" -f $_.ProcessId)
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+    } catch { }
+
+    Start-Sleep -Milliseconds 400
+}
+
+Stop-PreviousBotApollo
+
 # Start-Process ArgumentList: path com espaco PRECISA ir entre aspas numa string unica.
 if ([IO.Path]::GetFileNameWithoutExtension($py) -ieq "py") {
     $argLine = "-3 `"$main`""
