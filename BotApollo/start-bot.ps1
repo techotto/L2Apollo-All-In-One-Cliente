@@ -1,5 +1,5 @@
 # Sobe UMA instancia do Robo - L2 Apollo (mata a anterior).
-# Chamado pelo start.bat. Reinicio em crash fica no main.py.
+# Usa o mesmo Python do cmd (PATH do Windows / alias).
 $ErrorActionPreference = "Continue"
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $dir
@@ -15,63 +15,71 @@ function Write-Log([string]$msg) {
     try { Add-Content -LiteralPath $log -Value $line -Encoding UTF8 } catch { }
 }
 
+function Refresh-ProcessPath {
+    # Explorer/PS as vezes nao ve o PATH do usuario igual ao cmd interativo
+    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $user = [Environment]::GetEnvironmentVariable("Path", "User")
+    $parts = @()
+    if ($machine) { $parts += $machine }
+    if ($user) { $parts += $user }
+    if ($env:Path) { $parts += $env:Path }
+    $env:Path = ($parts -join ";")
+}
+
 function Resolve-PythonExe {
-    # 1) where.exe = mesma resolucao do cmd (python no PATH do Windows)
+    Refresh-ProcessPath
+
+    $hits = New-Object System.Collections.Generic.List[string]
     foreach ($name in @("pythonw", "python", "py")) {
         try {
-            $lines = & where.exe $name 2>$null
-        } catch {
-            $lines = $null
-        }
-        if (-not $lines) { continue }
-        foreach ($line in @($lines)) {
-            $src = [string]$line.Trim()
-            if (-not $src) { continue }
-            if ($src -match 'WindowsApps') { continue }
-            if (Test-Path -LiteralPath $src) { return $src }
-        }
+            foreach ($line in @(& where.exe $name 2>$null)) {
+                $t = [string]$line.Trim()
+                if ($t) { [void]$hits.Add($t) }
+            }
+        } catch { }
     }
 
-    # 2) Get-Command (pode achar fora do where)
+    Write-Log ("where hits: " + (($hits | Select-Object -Unique) -join " | "))
+
+    # 1) Instalacao real (fora WindowsApps)
+    foreach ($h in ($hits | Select-Object -Unique)) {
+        if ($h -match 'WindowsApps') { continue }
+        if (Test-Path -LiteralPath $h) { return $h }
+    }
+
+    # 2) Alias Microsoft Store / unico no PATH — no cmd o cliente usa isso e abre 3.x
+    foreach ($h in ($hits | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath $h) { return $h }
+    }
+
+    # 3) Nome puro (Start-Process resolve no PATH, igual digitar python no cmd)
     foreach ($name in @("pythonw", "python", "py")) {
-        $all = @(Get-Command $name -All -ErrorAction SilentlyContinue)
-        foreach ($cmd in $all) {
-            $src = [string]$cmd.Source
-            if (-not $src -or ($src -match 'WindowsApps')) { continue }
-            if (Test-Path -LiteralPath $src) { return $src }
-        }
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd) { return $name }
     }
 
-    # 3) Pastas tipicas de instalacao
-    $roots = @(
-        (Join-Path $env:LOCALAPPDATA "Programs\Python"),
-        (Join-Path $env:LOCALAPPDATA "Python"),
-        (Join-Path ${env:ProgramFiles} "Python*"),
-        (Join-Path ${env:ProgramFiles(x86)} "Python*")
+    # 4) Pastas tipicas
+    $guess = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\pythonw.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\python.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\pythonw.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\pythonw.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\python.exe"),
+        (Join-Path $env:LOCALAPPDATA "Python\bin\pythonw.exe"),
+        (Join-Path $env:LOCALAPPDATA "Python\bin\python.exe")
     )
-    foreach ($rootPat in $roots) {
-        if (-not $rootPat) { continue }
-        $dirs = @()
-        try { $dirs = @(Get-Item -Path $rootPat -ErrorAction SilentlyContinue) } catch { }
-        foreach ($d in $dirs) {
+    foreach ($g in $guess) {
+        if (Test-Path -LiteralPath $g) { return $g }
+    }
+
+    Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python") -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
             foreach ($exe in @("pythonw.exe", "python.exe")) {
-                $candidate = Join-Path $d.FullName $exe
-                if (Test-Path -LiteralPath $candidate) { return $candidate }
-                $candidate2 = Join-Path $d.FullName (Join-Path "bin" $exe)
-                if (Test-Path -LiteralPath $candidate2) { return $candidate2 }
+                $c = Join-Path $_.FullName $exe
+                if (Test-Path -LiteralPath $c) { return $c }
             }
         }
-        # Python3xx subdirs
-        if (Test-Path -LiteralPath (Split-Path $rootPat -Parent)) {
-            Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python") -Directory -ErrorAction SilentlyContinue |
-                ForEach-Object {
-                    foreach ($exe in @("pythonw.exe", "python.exe")) {
-                        $c = Join-Path $_.FullName $exe
-                        if (Test-Path -LiteralPath $c) { return $c }
-                    }
-                }
-        }
-    }
 
     return $null
 }
@@ -79,33 +87,26 @@ function Resolve-PythonExe {
 function Stop-PreviousBotApollo([string]$mainPath) {
     $myPid = $PID
     $mainLeaf = [IO.Path]::GetFileName($mainPath)
-    $dirNorm = $dir.TrimEnd('\')
 
-    # Qualquer watch antigo desta pasta
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
             $_.ProcessId -ne $myPid -and
             $_.Name -match '^(powershell|pwsh)\.exe$' -and
             $_.CommandLine -and
-            ($_.CommandLine -match 'restart-watch\.ps1|start-bot\.ps1') -and
-            ($_.CommandLine -like ("*{0}*" -f [IO.Path]::GetFileName($dirNorm)))
+            ($_.CommandLine -match 'restart-watch\.ps1|start-bot\.ps1')
         } |
         ForEach-Object {
             Write-Log ("Matando watch PID={0}" -f $_.ProcessId)
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
         }
 
-    # python desta pasta / main.py
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
             $_.Name -match '^pythonw?\.exe$' -and
             $_.CommandLine -and
             (
                 ($_.CommandLine -like ("*{0}*" -f $mainPath)) -or
-                (
-                    ($_.CommandLine -like ("*{0}*" -f $mainLeaf)) -and
-                    ($_.CommandLine -like '*BotApollo*')
-                )
+                (($_.CommandLine -like ("*{0}*" -f $mainLeaf)) -and ($_.CommandLine -like '*BotApollo*'))
             )
         } |
         ForEach-Object {
@@ -113,26 +114,23 @@ function Stop-PreviousBotApollo([string]$mainPath) {
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
         }
 
-    # PID file
     $pidFile = Join-Path $logDir "robo.pid"
     if (Test-Path -LiteralPath $pidFile) {
         try {
             $old = [int]((Get-Content -LiteralPath $pidFile -Raw).Trim())
-            if ($old -gt 0) {
-                Stop-Process -Id $old -Force -ErrorAction SilentlyContinue
-            }
+            if ($old -gt 0) { Stop-Process -Id $old -Force -ErrorAction SilentlyContinue }
         } catch { }
         Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
     }
 
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 400
 }
 
 $py = Resolve-PythonExe
 $main = Join-Path $dir "main.py"
 
 if (-not $py) {
-    Write-Log "ERRO: Python nao encontrado"
+    Write-Log "ERRO: Python nao encontrado apos refresh PATH"
     try {
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
@@ -152,17 +150,23 @@ Stop-PreviousBotApollo -mainPath $main
 
 Write-Log "Python=$py"
 Write-Log "Main=$main"
-Write-Log "Start-Process (sem Wait)..."
 
-# Path com espaco: ArgumentList como STRING com aspas
-$argLine = "`"$main`""
-if ([IO.Path]::GetFileNameWithoutExtension($py) -ieq "py") {
+# py launcher precisa -3; path com espaco entre aspas
+if ($py -eq "py" -or ([IO.Path]::GetFileNameWithoutExtension([string]$py) -ieq "py")) {
     $argLine = "-3 `"$main`""
+} else {
+    $argLine = "`"$main`""
 }
 
+Write-Log "Start args=$argLine"
 $p = Start-Process -FilePath $py -ArgumentList $argLine -WorkingDirectory $dir -PassThru -WindowStyle Hidden
 if ($null -eq $p) {
-    Write-Log "ERRO: Start-Process falhou"
+    Write-Log "ERRO: Start-Process falhou com FilePath=$py — tentando via cmd"
+    # Ultimo recurso: mesmo jeito que o cliente testa no cmd
+    $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c","python `"$main`"" -WorkingDirectory $dir -PassThru -WindowStyle Hidden
+}
+if ($null -eq $p) {
+    Write-Log "ERRO: Start-Process falhou de vez"
     exit 1
 }
 Write-Log ("OK PID={0}" -f $p.Id)
