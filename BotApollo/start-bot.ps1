@@ -16,7 +16,6 @@ function Write-Log([string]$msg) {
 }
 
 function Refresh-ProcessPath {
-    # Explorer/PS as vezes nao ve o PATH do usuario igual ao cmd interativo
     $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $user = [Environment]::GetEnvironmentVariable("Path", "User")
     $parts = @()
@@ -41,24 +40,20 @@ function Resolve-PythonExe {
 
     Write-Log ("where hits: " + (($hits | Select-Object -Unique) -join " | "))
 
-    # 1) Instalacao real (fora WindowsApps)
     foreach ($h in ($hits | Select-Object -Unique)) {
-        if ($h -match 'WindowsApps') { continue }
+        if ($h -match "WindowsApps") { continue }
         if (Test-Path -LiteralPath $h) { return $h }
     }
 
-    # 2) Alias Microsoft Store / unico no PATH — no cmd o cliente usa isso e abre 3.x
     foreach ($h in ($hits | Select-Object -Unique)) {
         if (Test-Path -LiteralPath $h) { return $h }
     }
 
-    # 3) Nome puro (Start-Process resolve no PATH, igual digitar python no cmd)
     foreach ($name in @("pythonw", "python", "py")) {
         $cmd = Get-Command $name -ErrorAction SilentlyContinue
         if ($cmd) { return $name }
     }
 
-    # 4) Pastas tipicas
     $guess = @(
         (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\pythonw.exe"),
         (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\python.exe"),
@@ -91,9 +86,9 @@ function Stop-PreviousBotApollo([string]$mainPath) {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
             $_.ProcessId -ne $myPid -and
-            $_.Name -match '^(powershell|pwsh)\.exe$' -and
+            $_.Name -match "^(powershell|pwsh)\.exe$" -and
             $_.CommandLine -and
-            ($_.CommandLine -match 'restart-watch\.ps1|start-bot\.ps1')
+            ($_.CommandLine -match "restart-watch\.ps1|start-bot\.ps1")
         } |
         ForEach-Object {
             Write-Log ("Matando watch PID={0}" -f $_.ProcessId)
@@ -102,11 +97,11 @@ function Stop-PreviousBotApollo([string]$mainPath) {
 
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.Name -match '^pythonw?\.exe$' -and
+            $_.Name -match "^pythonw?\.exe$" -and
             $_.CommandLine -and
             (
                 ($_.CommandLine -like ("*{0}*" -f $mainPath)) -or
-                (($_.CommandLine -like ("*{0}*" -f $mainLeaf)) -and ($_.CommandLine -like '*BotApollo*'))
+                (($_.CommandLine -like ("*{0}*" -f $mainLeaf)) -and ($_.CommandLine -like "*BotApollo*"))
             )
         } |
         ForEach-Object {
@@ -148,26 +143,24 @@ if (-not (Test-Path -LiteralPath $main)) {
 Write-Log "Kill anteriores..."
 Stop-PreviousBotApollo -mainPath $main
 
-Write-Log "Python=$py"
-Write-Log "Main=$main"
+Write-Log ("Python=" + $py)
+Write-Log ("Main=" + $main)
 
-# py launcher precisa -3; path com espaco entre aspas
 if ($py -eq "py" -or ([IO.Path]::GetFileNameWithoutExtension([string]$py) -ieq "py")) {
-    $argLine = "-3 `"$main`""
+    $argLine = '-3 "' + $main + '"'
 } else {
-    $argLine = "`"$main`""
+    $argLine = '"' + $main + '"'
 }
 
-Write-Log "Start args=$argLine"
+Write-Log ("Start args=" + $argLine)
 $p = Start-Process -FilePath $py -ArgumentList $argLine -WorkingDirectory $dir -PassThru -WindowStyle Hidden
 if ($null -eq $p) {
-    Write-Log "ERRO: Start-Process falhou com FilePath=$py — tentando via cmd"
-    # Ultimo recurso: mesmo jeito que o cliente testa no cmd
-    $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c","python `"$main`"" -WorkingDirectory $dir -PassThru -WindowStyle Hidden
+    Write-Log "ERRO: Start-Process falhou; tentando via cmd"
+    $p = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", ('python "' + $main + '"')) -WorkingDirectory $dir -PassThru -WindowStyle Hidden
 }
 if ($null -eq $p) {
     Write-Log "ERRO: Start-Process falhou de vez"
     exit 1
 }
-Write-Log ("OK PID={0}" -f $p.Id)
+Write-Log ("OK PID=" + $p.Id)
 exit 0
