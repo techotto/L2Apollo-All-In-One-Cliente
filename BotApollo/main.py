@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,9 @@ import mss
 import numpy as np
 import serial
 from serial.serialutil import SerialException
+
+from overlay import BotOverlay, OverlayStatus
+from win_focus import focus_game_window
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -48,6 +52,35 @@ class Rule:
         return f"se [{self.when_label}] -> clicar em [{click_desc}]"
 
 
+class BotRuntime:
+    def __init__(self) -> None:
+        self.enabled = True
+        self.arduino_ok = False
+        self.fixed_pending = False
+        self.last_action = "iniciando..."
+        self.stop = False
+        self.machine_fail_alerted = False
+        self._lock = threading.Lock()
+
+    def set_enabled(self, value: bool) -> None:
+        with self._lock:
+            self.enabled = value
+            self.last_action = "ATIVO" if value else "PAUSADO"
+
+    def snapshot(self) -> OverlayStatus:
+        with self._lock:
+            return OverlayStatus(
+                enabled=self.enabled,
+                arduino_ok=self.arduino_ok,
+                fixed_pending=self.fixed_pending,
+                last_action=self.last_action,
+            )
+
+    def note(self, text: str) -> None:
+        with self._lock:
+            self.last_action = text
+
+
 def load_config() -> dict[str, str]:
     if not CONFIG_FILE.is_file():
         raise FileNotFoundError(f"Arquivo de configuracao nao encontrado: {CONFIG_FILE}")
@@ -76,6 +109,13 @@ def get_int(config: dict[str, str], key: str, default: int) -> int:
         return default
 
 
+def get_bool(config: dict[str, str], key: str, default: bool) -> bool:
+    raw = config.get(key)
+    if raw is None or raw == "":
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on", "sim"}
+
+
 def resolve_image(name: str) -> Path:
     cleaned = name.strip().strip('"').strip("'")
     path = Path(cleaned)
@@ -84,7 +124,6 @@ def resolve_image(name: str) -> Path:
     if path.is_file():
         return path
 
-    # Compat: imagem.png -> images/imagem.png
     if "/" not in cleaned and "\\" not in cleaned:
         fallback = IMAGES_DIR / cleaned
         if fallback.is_file():
@@ -149,9 +188,6 @@ def parse_rules_file(
             )
         )
 
-    if not rules:
-        return []
-
     return rules
 
 
@@ -179,12 +215,224 @@ def load_rules(config: dict[str, str], default_threshold: float) -> tuple[list[R
     return [build_simple_rule(image_name)], f"simples ({image_name})"
 
 
-def connect_arduino(port: str, baud: int) -> serial.Serial:
-    print(f"Conectando ao Arduino em {port} ({baud} baud)...", flush=True)
+def connect_arduino(port: str, baud: int, *, settle_s: float = 2.0) -> serial.Serial:
+    print(f"Conectando Machine (Apollo) em {port} ({baud} baud)...", flush=True)
     connection = serial.Serial(port, baud, timeout=1)
-    time.sleep(2)
-    print("Arduino conectado.", flush=True)
+    time.sleep(settle_s)
+    print(f"Machine (Apollo) conectada em {port}.", flush=True)
     return connection
+
+
+def _normalize_com(port: str) -> str:
+    raw = port.strip().upper().replace(" ", "")
+    if not raw:
+        return ""
+    if raw.isdigit():
+        return f"COM{raw}"
+    if raw.startswith("COM"):
+        return raw
+    return raw
+
+
+def _port_looks_like_machine(description: str, hwid: str, manufacturer: str) -> bool:
+    blob = f"{description} {hwid} {manufacturer}".lower()
+    needles = (
+        "arduino",
+        "ch340",
+        "ch341",
+        "cp210",
+        "ftdi",
+        "usb serial",
+        "usb-serial",
+        "leonardo",
+        "promicro",
+        "sparkfun",
+        "cdc",
+    )
+    return any(n in blob for n in needles)
+
+
+def _banner_looks_like_machine(text: str) -> bool:
+    low = text.lower()
+    return ("pronto" in low) or ("arduino" in low) or ("mouse" in low and "teclado" in low)
+
+
+def list_candidate_com_ports(preferred: str, scan_max: int) -> list[str]:
+    """
+    Ordem: porta preferida (se houver) -> COM1, COM2, COM3... ate SCAN_MAX.
+    """
+    preferred_n = _normalize_com(preferred)
+    auto = preferred_n in {"", "AUTO", "AUTODETECT", "SCAN"}
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def add(port: str) -> None:
+        p = _normalize_com(port)
+        if not p or p in seen:
+            return
+        seen.add(p)
+        ordered.append(p)
+
+    if not auto and preferred_n:
+        add(preferred_n)
+
+    existing: set[str] = set()
+    try:
+        from serial.tools import list_ports
+
+        for info in list_ports.comports():
+            dev = _normalize_com(info.device or "")
+            if dev:
+                existing.add(dev)
+    except Exception:
+        pass
+
+    for idx in range(1, max(1, scan_max) + 1):
+        port = f"COM{idx}"
+        # Se o Windows listou portas, pula as que nao existem (mais rapido)
+        if existing and port not in existing:
+            continue
+        add(port)
+
+    if not ordered:
+        for idx in range(1, max(1, scan_max) + 1):
+            add(f"COM{idx}")
+
+    return ordered
+
+
+def probe_machine_port(port: str, baud: int) -> serial.Serial | None:
+    """Abre a porta e valida se parece a Machine (banner ou porta tipica)."""
+    ser: serial.Serial | None = None
+    try:
+        ser = serial.Serial(port, baud, timeout=0.4)
+        # Leonardo/Pro Micro reinicia ao abrir serial
+        time.sleep(1.6)
+        chunks: list[str] = []
+        deadline = time.monotonic() + 1.2
+        while time.monotonic() < deadline:
+            waiting = ser.in_waiting
+            if waiting:
+                chunks.append(ser.read(waiting).decode("utf-8", errors="ignore"))
+                if _banner_looks_like_machine("".join(chunks)):
+                    ser.timeout = 1
+                    return ser
+            else:
+                time.sleep(0.05)
+
+        banner = "".join(chunks)
+        if _banner_looks_like_machine(banner):
+            ser.timeout = 1
+            return ser
+
+        # Sem banner: ainda aceita se a porta estiver listada como Arduino-like
+        try:
+            from serial.tools import list_ports
+
+            for info in list_ports.comports():
+                if _normalize_com(info.device or "") != _normalize_com(port):
+                    continue
+                if _port_looks_like_machine(
+                    info.description or "",
+                    info.hwid or "",
+                    info.manufacturer or "",
+                ):
+                    ser.timeout = 1
+                    return ser
+        except Exception:
+            pass
+
+        # Ultimo recurso: se abriu COM e nao deu erro, e so restou esta
+        # (quem chama decide). Aqui devolvemos None pra continuar o scan.
+        ser.close()
+        return None
+    except (OSError, SerialException, ValueError):
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+        return None
+
+
+def _alert_machine_failed(scan_max: int) -> None:
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            (
+                f"Machine (Apollo) nao encontrada.\n\n"
+                f"Varri COM1 ate COM{scan_max} e nenhuma respondeu.\n"
+                f"Conecte o cabo USB e reinicie o Robo, ou defina\n"
+                f"ARDUINO_PORT=COMx no config.conf."
+            ),
+            "Robo - L2 Apollo",
+            0x10,  # MB_ICONERROR
+        )
+    except Exception:
+        pass
+
+
+def find_machine(
+    preferred: str,
+    baud: int,
+    scan_max: int,
+    runtime: BotRuntime | None = None,
+) -> tuple[serial.Serial | None, str]:
+    """
+    Tenta a porta preferida e depois COM1, COM2... ate achar a Machine.
+    Retorna (conexao, porta) ou (None, '').
+    """
+    preferred_n = _normalize_com(preferred)
+    auto = preferred_n in {"", "AUTO", "AUTODETECT", "SCAN"}
+    candidates = list_candidate_com_ports(preferred, scan_max)
+    print(
+        f"Procurando Machine (Apollo) em {len(candidates)} porta(s) "
+        f"(ate COM{scan_max})...",
+        flush=True,
+    )
+    if runtime is not None:
+        runtime.note(f"procurando ate COM{scan_max}...")
+
+    for port in candidates:
+        if runtime is not None and runtime.stop:
+            return None, ""
+        if runtime is not None:
+            runtime.note(f"testando {port}...")
+        print(f"  Testando {port}...", flush=True)
+        found = probe_machine_port(port, baud)
+        if found is not None:
+            print(f"Machine (Apollo) encontrada em {port}.", flush=True)
+            if runtime is not None:
+                runtime.machine_fail_alerted = False
+                runtime.note(f"Machine ok ({port})")
+            return found, port
+
+    # Porta fixa no config: tenta abrir mesmo sem banner (compat).
+    if not auto and preferred_n:
+        try:
+            if runtime is not None:
+                runtime.note(f"abrindo {preferred_n}...")
+            ser = connect_arduino(preferred_n, baud, settle_s=1.8)
+            if runtime is not None:
+                runtime.machine_fail_alerted = False
+                runtime.note(f"Machine ok ({preferred_n})")
+            return ser, preferred_n
+        except (OSError, SerialException) as exc:
+            print(f"Falha em {preferred_n}: {exc}", flush=True)
+
+    fail_msg = f"FALHOU: Machine nao achada ate COM{scan_max}"
+    print(fail_msg, flush=True)
+    if runtime is not None:
+        runtime.note(fail_msg)
+        if not runtime.machine_fail_alerted:
+            runtime.machine_fail_alerted = True
+            _alert_machine_failed(scan_max)
+    else:
+        _alert_machine_failed(scan_max)
+    return None, ""
 
 
 def pixel_to_arduino(
@@ -278,27 +526,51 @@ def ordered_rules_for_tick(rules: list[Rule]) -> list[Rule]:
     return other_rules
 
 
-def main() -> int:
-    config = load_config()
-    port = config.get("ARDUINO_PORT", "COM7")
+def maybe_focus_game(
+    runtime: BotRuntime,
+    *,
+    enabled: bool,
+    title: str,
+    maximize: bool,
+    was_pending: bool,
+    now_pending: bool,
+) -> None:
+    if not enabled or not title.strip():
+        return
+    if now_pending and not was_pending:
+        ok = focus_game_window(title, maximize=maximize)
+        msg = "jogo em foco" if ok else f"janela nao achada ({title})"
+        runtime.note(msg)
+        print(f"Fixed: {msg}", flush=True)
+
+
+def bot_loop(config: dict[str, str], runtime: BotRuntime) -> int:
+    preferred_port = config.get("ARDUINO_PORT", "AUTO")
     baud = get_int(config, "ARDUINO_BAUD", 115200)
+    scan_max = get_int(config, "ARDUINO_SCAN_MAX", 40)
+    rescan_every = max(3.0, get_float(config, "ARDUINO_RESCAN_S", 8.0))
     default_threshold = get_float(config, "MATCH_THRESHOLD", 0.80)
     check_interval = max(0.01, get_float(config, "CHECK_INTERVAL_S", 0.10))
     click_cooldown = max(0.0, get_float(config, "CLICK_COOLDOWN_S", 1.0))
     monitor_number = get_int(config, "MONITOR", 1)
+    focus_on_fixed = get_bool(config, "FOCUS_GAME_ON_FIXED", True)
+    game_title = config.get("GAME_WINDOW_TITLE", "Lineage").strip()
+    maximize_game = get_bool(config, "GAME_WINDOW_MAXIMIZE", True)
 
     try:
         rules, mode_label = load_rules(config, default_threshold)
     except (FileNotFoundError, ValueError) as exc:
         print(f"ERRO de configuracao: {exc}", flush=True)
+        runtime.note(f"erro config: {exc}")
         return 1
 
-    try:
-        arduino = connect_arduino(port, baud)
-    except SerialException as exc:
-        print(f"ERRO ao conectar ao Arduino: {exc}", flush=True)
-        print("Confira ARDUINO_PORT no config.conf.", flush=True)
-        return 1
+    arduino: serial.Serial | None = None
+    active_port = ""
+    arduino, active_port = find_machine(preferred_port, baud, scan_max, runtime)
+    runtime.arduino_ok = arduino is not None
+    if arduino is None:
+        runtime.note("Machine off — continua procurando")
+    next_rescan = time.monotonic() + rescan_every
 
     try:
         with mss.MSS() as screenshotter:
@@ -308,6 +580,7 @@ def main() -> int:
                     f"Monitores disponiveis: 1 a {len(screenshotter.monitors) - 1}.",
                     flush=True,
                 )
+                runtime.note("monitor invalido")
                 return 1
 
             monitor = screenshotter.monitors[monitor_number]
@@ -318,17 +591,45 @@ def main() -> int:
             )
             for rule in rules:
                 print(f"  Regra {rule.index}: {rule.description}", flush=True)
-            print("Pressione Ctrl+C para encerrar.", flush=True)
+            print("Overlay: ATIVO/PAUSADO | Ctrl+C ou Sair na janela.", flush=True)
 
             last_click = 0.0
-            while True:
+            was_fixed = False
+            while not runtime.stop:
+                if arduino is None and time.monotonic() >= next_rescan:
+                    arduino, active_port = find_machine(
+                        preferred_port, baud, scan_max, runtime
+                    )
+                    runtime.arduino_ok = arduino is not None
+                    next_rescan = time.monotonic() + rescan_every
+
+                fixed_now = FIXED_FLAG.is_file()
+                runtime.fixed_pending = fixed_now
+                maybe_focus_game(
+                    runtime,
+                    enabled=focus_on_fixed,
+                    title=game_title,
+                    maximize=maximize_game,
+                    was_pending=was_fixed,
+                    now_pending=fixed_now,
+                )
+                was_fixed = fixed_now
+
+                if not runtime.enabled:
+                    time.sleep(check_interval)
+                    continue
+
+                if arduino is None:
+                    time.sleep(check_interval)
+                    continue
+
                 shot = np.asarray(screenshotter.grab(monitor))
                 screen = cv2.cvtColor(shot, cv2.COLOR_BGRA2BGR)
                 now = time.monotonic()
 
                 active_rules = ordered_rules_for_tick(rules)
                 effective_cooldown = (
-                    min(click_cooldown, 0.35) if FIXED_FLAG.is_file() else click_cooldown
+                    min(click_cooldown, 0.35) if fixed_now else click_cooldown
                 )
                 if now - last_click >= effective_cooldown:
                     for rule in active_rules:
@@ -342,11 +643,12 @@ def main() -> int:
                             continue
 
                         if click_match is None:
-                            print(
-                                f"Regra {rule.index}: condicao [{rule.when_label}] ok "
-                                f"({when_match.confidence:.2f}), mas alvo [{rule.click_label}] nao encontrado.",
-                                flush=True,
+                            msg = (
+                                f"Regra {rule.index}: [{rule.when_label}] ok, "
+                                f"alvo [{rule.click_label}] nao achado"
                             )
+                            print(msg, flush=True)
+                            runtime.note(msg)
                             break
 
                         try:
@@ -374,25 +676,88 @@ def main() -> int:
                                     ),
                                 )
                             last_click = now
+                            runtime.note(f"clicou regra {rule.index}")
                         except (OSError, SerialException) as exc:
-                            print(f"Arduino desconectado ({exc}). Reconectando...", flush=True)
+                            print(f"Machine desconectada ({exc}). Reconectando...", flush=True)
+                            runtime.arduino_ok = False
+                            runtime.note("reconnect Machine...")
                             try:
                                 arduino.close()
                             except OSError:
                                 pass
-                            arduino = connect_arduino(port, baud)
+                            arduino = None
+                            active_port = ""
+                            arduino, active_port = find_machine(
+                                preferred_port, baud, scan_max, runtime
+                            )
+                            runtime.arduino_ok = arduino is not None
+                            next_rescan = time.monotonic() + rescan_every
                         break
 
                 time.sleep(check_interval)
     except KeyboardInterrupt:
         print("\nBot encerrado pelo usuario.", flush=True)
+        runtime.note("encerrado")
     finally:
-        try:
-            arduino.close()
-        except OSError:
-            pass
+        runtime.stop = True
+        if arduino is not None:
+            try:
+                arduino.close()
+            except OSError:
+                pass
+            runtime.arduino_ok = False
 
     return 0
+
+
+def main() -> int:
+    config = load_config()
+    runtime = BotRuntime()
+    use_ui = get_bool(config, "UI_ENABLED", True)
+
+    if not use_ui:
+        try:
+            return bot_loop(config, runtime)
+        except KeyboardInterrupt:
+            print("\nBot encerrado pelo usuario.", flush=True)
+            return 0
+
+    result: dict[str, int] = {"code": 0}
+
+    def worker() -> None:
+        try:
+            result["code"] = bot_loop(config, runtime)
+        except Exception as exc:
+            print(f"ERRO inesperado no loop: {exc}", flush=True)
+            runtime.note(f"erro: {exc}")
+            result["code"] = 1
+        finally:
+            runtime.stop = True
+
+    thread = threading.Thread(target=worker, name="bot-loop", daemon=True)
+    thread.start()
+
+    def on_toggle(enabled: bool) -> None:
+        runtime.set_enabled(enabled)
+        print(f"Bot {'ATIVO' if enabled else 'PAUSADO'}", flush=True)
+
+    def on_quit() -> None:
+        runtime.stop = True
+        print("Saindo pela interface...", flush=True)
+
+    hotkey = config.get("UI_HOTKEY", "F8").strip() or "F8"
+    overlay = BotOverlay(
+        on_toggle=on_toggle,
+        on_quit=on_quit,
+        get_status=runtime.snapshot,
+        title="Robo - L2 Apollo",
+        hotkey=hotkey,
+    )
+    overlay.run()
+
+    runtime.stop = True
+    thread.join(timeout=5.0)
+    return result.get("code", 0)
 
 
 if __name__ == "__main__":

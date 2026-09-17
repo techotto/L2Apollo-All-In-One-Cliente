@@ -1,8 +1,12 @@
-# Porta usada pelo Arduino.
+# Porta da Machine (Apollo). AUTO = tenta COM1, COM2... ate achar.
 
-ARDUINO_PORT=COM7
+ARDUINO_PORT=AUTO
 
 ARDUINO_BAUD=115200
+
+ARDUINO_SCAN_MAX=40
+
+ARDUINO_RESCAN_S=8
 
 
 
@@ -67,4 +71,27 @@ CLICK_COOLDOWN_S=1.0
 # 0.08 ~= 12 teclas/s | 0.05 ~= 20/s | 0.15 ~= 6/s | 0 = maximo
 
 F12_INTERVAL_S=0.05
+
+
+
+# ---------------------------------------------------------------------------
+
+# INTERFACE (janela pequena sempre no topo: ATIVO / PAUSADO)
+
+# ---------------------------------------------------------------------------
+
+UI_ENABLED=1
+
+# Atalho global liga/desliga (ex.: F8, PAUSE, CTRL+SHIFT+F9)
+UI_HOTKEY=F8
+
+
+
+# Quando o All-In-One pedir Fixed, traz a janela do jogo pra frente.
+
+FOCUS_GAME_ON_FIXED=1
+
+GAME_WINDOW_TITLE=Lineage
+
+GAME_WINDOW_MAXIMIZE=1
 
