@@ -209,7 +209,8 @@ class BotOverlay:
         self.root.resizable(False, False)
         self.root.configure(bg=self.BG)
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
-        self.root.geometry("+48+96")
+        # Posicao final apos montar o layout (canto superior direito, ~30px)
+        self.root.geometry("+0+0")
 
         shell = tk.Frame(self.root, bg=self.BG, highlightthickness=1, highlightbackground="#2a313c")
         shell.pack(fill="both", expand=True)
@@ -327,6 +328,20 @@ class BotOverlay:
         self._refresh_ui()
         self.root.after(16, self._fade_tick)
         self.root.after(80, self._tick)
+        self.root.after_idle(self._place_top_right)
+
+    def _place_top_right(self, margin: int = 30) -> None:
+        """Ancora no canto superior direito do monitor primario."""
+        try:
+            self.root.update_idletasks()
+            width = max(1, self.root.winfo_reqwidth())
+            height = max(1, self.root.winfo_reqheight())
+            screen_w = self.root.winfo_screenwidth()
+            x = max(margin, screen_w - width - margin)
+            y = margin
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
+        except tk.TclError:
+            pass
 
     def _start_global_hotkey(self) -> None:
         def schedule(cb: Callable[[], None]) -> None:
