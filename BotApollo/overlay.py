@@ -197,7 +197,7 @@ class BotOverlay:
         self._drag_x = 0
         self._drag_y = 0
         self._alpha = 0.0
-        self._target_alpha = 0.94
+        self._target_alpha = 0.72
         self._pulse_until = 0.0
         self._hotkey: GlobalHotkeyWatcher | None = None
 
@@ -215,7 +215,7 @@ class BotOverlay:
         shell.pack(fill="both", expand=True)
         self._shell = shell
 
-        pad = tk.Frame(shell, bg=self.BG, padx=14, pady=12)
+        pad = tk.Frame(shell, bg=self.BG, padx=8, pady=6)
         pad.pack(fill="both", expand=True)
 
         header = tk.Frame(pad, bg=self.BG)
@@ -229,7 +229,7 @@ class BotOverlay:
             text=title,
             fg=self.FG,
             bg=self.BG,
-            font=("Segoe UI Semibold", 11),
+            font=("Segoe UI Semibold", 9),
             cursor="fleur",
             anchor="w",
         )
@@ -242,9 +242,9 @@ class BotOverlay:
             text="✕",
             fg=self.MUTED,
             bg=self.BG,
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
             cursor="hand2",
-            padx=4,
+            padx=2,
         )
         self._close_btn.pack(side="right")
         self._close_btn.bind("<Button-1>", lambda _e: self._quit())
@@ -253,73 +253,73 @@ class BotOverlay:
 
         self._subtitle = tk.Label(
             pad,
-            text=f"atalho global {self._hotkey_spec} · arraste para mover",
+            text=f"{self._hotkey_spec} · arraste",
             fg=self.MUTED,
             bg=self.BG,
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 7),
             anchor="w",
         )
-        self._subtitle.pack(fill="x", pady=(2, 10))
+        self._subtitle.pack(fill="x", pady=(0, 4))
 
         self._btn = tk.Label(
             pad,
             text="ATIVO",
-            font=("Segoe UI Semibold", 13),
+            font=("Segoe UI Semibold", 10),
             fg="#0b1a12",
             bg=self.GREEN,
-            padx=18,
-            pady=10,
+            padx=8,
+            pady=4,
             cursor="hand2",
         )
         self._btn.pack(fill="x")
         self._btn.bind("<Button-1>", lambda _e: self._toggle())
 
         status_row = tk.Frame(pad, bg=self.BG)
-        status_row.pack(fill="x", pady=(12, 0))
+        status_row.pack(fill="x", pady=(5, 0))
 
-        self._arduino_card = tk.Frame(status_row, bg=self.RED_DIM, padx=8, pady=6)
-        self._arduino_card.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        self._arduino_card = tk.Frame(status_row, bg=self.RED_DIM, padx=4, pady=2)
+        self._arduino_card.pack(side="left", fill="x", expand=True, padx=(0, 3))
         self._arduino_dot = tk.Label(
-            self._arduino_card, text="●", fg=self.RED, bg=self.RED_DIM, font=("Segoe UI", 8)
+            self._arduino_card, text="●", fg=self.RED, bg=self.RED_DIM, font=("Segoe UI", 7)
         )
         self._arduino_dot.pack(side="left")
         self._arduino_lbl = tk.Label(
             self._arduino_card,
-            text="Machine (Apollo) off",
+            text="Machine off",
             fg=self.FG,
             bg=self.RED_DIM,
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 7),
             anchor="w",
         )
-        self._arduino_lbl.pack(side="left", padx=(4, 0))
+        self._arduino_lbl.pack(side="left", padx=(3, 0))
 
-        self._fixed_card = tk.Frame(status_row, bg=self.BG_SOFT, padx=8, pady=6)
-        self._fixed_card.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        self._fixed_card = tk.Frame(status_row, bg=self.BG_SOFT, padx=4, pady=2)
+        self._fixed_card.pack(side="left", fill="x", expand=True, padx=(3, 0))
         self._fixed_dot = tk.Label(
-            self._fixed_card, text="●", fg=self.MUTED, bg=self.BG_SOFT, font=("Segoe UI", 8)
+            self._fixed_card, text="●", fg=self.MUTED, bg=self.BG_SOFT, font=("Segoe UI", 7)
         )
         self._fixed_dot.pack(side="left")
         self._fixed_lbl = tk.Label(
             self._fixed_card,
-            text="Fixed idle",
+            text="Fixed —",
             fg=self.MUTED,
             bg=self.BG_SOFT,
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 7),
             anchor="w",
         )
-        self._fixed_lbl.pack(side="left", padx=(4, 0))
+        self._fixed_lbl.pack(side="left", padx=(3, 0))
 
         self._action_lbl = tk.Label(
             pad,
-            text="aguardando...",
+            text="...",
             fg=self.MUTED,
             bg=self.BG,
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 7),
             anchor="w",
-            wraplength=220,
+            wraplength=168,
             justify="left",
         )
-        self._action_lbl.pack(fill="x", pady=(10, 0))
+        self._action_lbl.pack(fill="x", pady=(4, 0))
 
         self.root.bind("<Escape>", lambda _e: self._quit())
         self._start_global_hotkey()
@@ -339,17 +339,13 @@ class BotOverlay:
         )
         self._hotkey.start()
         if self._hotkey.ok:
-            self._subtitle.configure(
-                text=f"atalho global {self._hotkey_spec} (sem foco) · arraste"
-            )
+            self._subtitle.configure(text=f"{self._hotkey_spec} global · arraste")
         elif self._hotkey.error == "ocupado":
-            self._subtitle.configure(
-                text=f"{self._hotkey_spec} ocupado por outro app · use o botao"
-            )
+            self._subtitle.configure(text=f"{self._hotkey_spec} ocupado")
         elif self._hotkey.error == "invalido":
-            self._subtitle.configure(text="atalho invalido · use o botao")
+            self._subtitle.configure(text="atalho invalido")
         else:
-            self._subtitle.configure(text="atalho falhou · use o botao")
+            self._subtitle.configure(text="atalho falhou")
 
     def _start_drag(self, event: tk.Event) -> None:
         self._drag_x = event.x_root - self.root.winfo_x()
@@ -400,7 +396,7 @@ class BotOverlay:
         target = self._target_alpha
         if now < self._pulse_until:
             phase = int((self._pulse_until - now) * 12) % 2
-            target = 0.78 if phase == 0 else 0.96
+            target = 0.55 if phase == 0 else 0.78
 
         step = 0.07
         if abs(self._alpha - target) < step:
@@ -430,7 +426,7 @@ class BotOverlay:
                 self._arduino_card,
                 self._arduino_dot,
                 self._arduino_lbl,
-                text="Machine (Apollo) ok",
+                text="Machine ok",
                 fg=self.GREEN,
                 bg=self.GREEN_DIM,
             )
@@ -439,7 +435,7 @@ class BotOverlay:
                 self._arduino_card,
                 self._arduino_dot,
                 self._arduino_lbl,
-                text="Machine (Apollo) off",
+                text="Machine off",
                 fg=self.RED,
                 bg=self.RED_DIM,
             )
@@ -449,7 +445,7 @@ class BotOverlay:
                 self._fixed_card,
                 self._fixed_dot,
                 self._fixed_lbl,
-                text="Fixed agora",
+                text="Fixed!",
                 fg=self.BLUE,
                 bg=self.BLUE_DIM,
             )
@@ -458,7 +454,7 @@ class BotOverlay:
                 self._fixed_card,
                 self._fixed_dot,
                 self._fixed_lbl,
-                text="Fixed idle",
+                text="Fixed —",
                 fg=self.MUTED,
                 bg=self.BG_SOFT,
             )
