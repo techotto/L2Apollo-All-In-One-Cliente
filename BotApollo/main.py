@@ -24,6 +24,84 @@ DEFAULT_RULES_FILE = SCRIPT_DIR / "rules.conf"
 FIXED_FLAG = Path(r"C:\Users\Public\l2apollo.botapollo.fixed")
 MOUSE_SCALE = 32767
 CLICK_SELF = "@self"
+CAPTURE_RETRIES = 4
+RESTART_DELAY_S = 3.0
+
+
+def enable_dpi_awareness() -> None:
+    """Evita BitBlt/mss falhar com DPI scaling do Windows."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+def open_screenshotter():
+    return mss.mss()
+
+
+def close_screenshotter(screenshotter) -> None:
+    if screenshotter is None:
+        return
+    try:
+        screenshotter.close()
+    except Exception:
+        pass
+
+
+def resolve_monitor(screenshotter, monitor_number: int) -> dict | None:
+    if monitor_number < 1 or monitor_number >= len(screenshotter.monitors):
+        return None
+    return screenshotter.monitors[monitor_number]
+
+
+def grab_screen_bgr(
+    screenshotter,
+    monitor: dict,
+    monitor_number: int,
+    runtime: "BotRuntime",
+):
+    """Captura BGR; em BitBlt/ScreenShotError recria o mss e tenta de novo.
+
+    Nunca propaga a falha — devolve (None, screenshotter, monitor) para o loop
+    seguir com Machine conectada.
+    """
+    last_err: Exception | None = None
+    for attempt in range(1, CAPTURE_RETRIES + 1):
+        try:
+            raw = screenshotter.grab(monitor)
+            shot = np.asarray(raw)
+            if shot.ndim != 3 or shot.shape[2] < 3 or shot.size == 0:
+                raise RuntimeError("frame vazio/invalido")
+            return cv2.cvtColor(shot, cv2.COLOR_BGRA2BGR), screenshotter, monitor
+        except Exception as exc:
+            last_err = exc
+            close_screenshotter(screenshotter)
+            time.sleep(0.05 * attempt)
+            try:
+                screenshotter = open_screenshotter()
+                monitor = resolve_monitor(screenshotter, monitor_number) or monitor
+            except Exception as recreate_exc:
+                last_err = recreate_exc
+                screenshotter = None
+
+    msg = f"captura falhou ({last_err})"
+    print(f"AVISO: {msg} — retentando no proximo tick", flush=True)
+    runtime.note(msg)
+    if screenshotter is None:
+        try:
+            screenshotter = open_screenshotter()
+            monitor = resolve_monitor(screenshotter, monitor_number) or monitor
+        except Exception:
+            pass
+    return None, screenshotter, monitor
 
 RULE_LINE_RE = re.compile(
     r"^(?P<when>.+?)\s*->\s*(?P<click>.+?)(?:\s*\|\s*(?P<threshold>[0-9.]+))?\s*$"
@@ -572,134 +650,150 @@ def bot_loop(config: dict[str, str], runtime: BotRuntime) -> int:
         runtime.note("Machine off — continua procurando")
     next_rescan = time.monotonic() + rescan_every
 
+    screenshotter = None
     try:
-        with mss.MSS() as screenshotter:
-            if monitor_number < 1 or monitor_number >= len(screenshotter.monitors):
-                print(
-                    f"ERRO: monitor {monitor_number} invalido. "
-                    f"Monitores disponiveis: 1 a {len(screenshotter.monitors) - 1}.",
-                    flush=True,
-                )
-                runtime.note("monitor invalido")
-                return 1
-
-            monitor = screenshotter.monitors[monitor_number]
+        screenshotter = open_screenshotter()
+        monitor = resolve_monitor(screenshotter, monitor_number)
+        if monitor is None:
             print(
-                f"Modo {mode_label} | monitor {monitor_number} "
-                f"({monitor['width']}x{monitor['height']}) | confianca padrao={default_threshold:.2f}",
+                f"ERRO: monitor {monitor_number} invalido. "
+                f"Monitores disponiveis: 1 a {len(screenshotter.monitors) - 1}.",
                 flush=True,
             )
-            for rule in rules:
-                print(f"  Regra {rule.index}: {rule.description}", flush=True)
-            print("Overlay: ATIVO/PAUSADO | Ctrl+C ou Sair na janela.", flush=True)
+            runtime.note("monitor invalido")
+            return 1
 
-            last_click = 0.0
-            was_fixed = False
-            while not runtime.stop:
-                if arduino is None and time.monotonic() >= next_rescan:
-                    arduino, active_port = find_machine(
-                        preferred_port, baud, scan_max, runtime
+        print(
+            f"Modo {mode_label} | monitor {monitor_number} "
+            f"({monitor['width']}x{monitor['height']}) | confianca padrao={default_threshold:.2f}",
+            flush=True,
+        )
+        for rule in rules:
+            print(f"  Regra {rule.index}: {rule.description}", flush=True)
+        print("Overlay: ATIVO/PAUSADO | Ctrl+C ou Sair na janela.", flush=True)
+
+        last_click = 0.0
+        was_fixed = False
+        while not runtime.stop:
+            if arduino is None and time.monotonic() >= next_rescan:
+                arduino, active_port = find_machine(
+                    preferred_port, baud, scan_max, runtime
+                )
+                runtime.arduino_ok = arduino is not None
+                next_rescan = time.monotonic() + rescan_every
+
+            fixed_now = FIXED_FLAG.is_file()
+            runtime.fixed_pending = fixed_now
+            maybe_focus_game(
+                runtime,
+                enabled=focus_on_fixed,
+                title=game_title,
+                maximize=maximize_game,
+                was_pending=was_fixed,
+                now_pending=fixed_now,
+            )
+            was_fixed = fixed_now
+
+            if not runtime.enabled:
+                time.sleep(check_interval)
+                continue
+
+            if arduino is None:
+                time.sleep(check_interval)
+                continue
+
+            if screenshotter is None:
+                try:
+                    screenshotter = open_screenshotter()
+                    monitor = resolve_monitor(screenshotter, monitor_number) or monitor
+                except Exception as exc:
+                    runtime.note(f"mss: {exc}")
+                    time.sleep(check_interval)
+                    continue
+
+            screen, screenshotter, monitor = grab_screen_bgr(
+                screenshotter, monitor, monitor_number, runtime
+            )
+            if screen is None:
+                time.sleep(check_interval)
+                continue
+
+            now = time.monotonic()
+
+            active_rules = ordered_rules_for_tick(rules)
+            effective_cooldown = (
+                min(click_cooldown, 0.35) if fixed_now else click_cooldown
+            )
+            if now - last_click >= effective_cooldown:
+                for rule in active_rules:
+                    when_match, click_match = evaluate_rule(
+                        screen,
+                        monitor,
+                        rule,
+                        default_threshold,
                     )
-                    runtime.arduino_ok = arduino is not None
-                    next_rescan = time.monotonic() + rescan_every
+                    if when_match is None:
+                        continue
 
-                fixed_now = FIXED_FLAG.is_file()
-                runtime.fixed_pending = fixed_now
-                maybe_focus_game(
-                    runtime,
-                    enabled=focus_on_fixed,
-                    title=game_title,
-                    maximize=maximize_game,
-                    was_pending=was_fixed,
-                    now_pending=fixed_now,
-                )
-                was_fixed = fixed_now
-
-                if not runtime.enabled:
-                    time.sleep(check_interval)
-                    continue
-
-                if arduino is None:
-                    time.sleep(check_interval)
-                    continue
-
-                shot = np.asarray(screenshotter.grab(monitor))
-                screen = cv2.cvtColor(shot, cv2.COLOR_BGRA2BGR)
-                now = time.monotonic()
-
-                active_rules = ordered_rules_for_tick(rules)
-                effective_cooldown = (
-                    min(click_cooldown, 0.35) if fixed_now else click_cooldown
-                )
-                if now - last_click >= effective_cooldown:
-                    for rule in active_rules:
-                        when_match, click_match = evaluate_rule(
-                            screen,
-                            monitor,
-                            rule,
-                            default_threshold,
+                    if click_match is None:
+                        msg = (
+                            f"Regra {rule.index}: [{rule.when_label}] ok, "
+                            f"alvo [{rule.click_label}] nao achado"
                         )
-                        if when_match is None:
-                            continue
-
-                        if click_match is None:
-                            msg = (
-                                f"Regra {rule.index}: [{rule.when_label}] ok, "
-                                f"alvo [{rule.click_label}] nao achado"
-                            )
-                            print(msg, flush=True)
-                            runtime.note(msg)
-                            break
-
-                        try:
-                            if rule.click_template is None:
-                                send_click(
-                                    arduino,
-                                    click_match.center_x,
-                                    click_match.center_y,
-                                    monitor,
-                                    (
-                                        f"Regra {rule.index}: [{rule.when_label}] "
-                                        f"({when_match.confidence:.2f}) -> clique na condicao"
-                                    ),
-                                )
-                            else:
-                                send_click(
-                                    arduino,
-                                    click_match.center_x,
-                                    click_match.center_y,
-                                    monitor,
-                                    (
-                                        f"Regra {rule.index}: [{rule.when_label}] "
-                                        f"({when_match.confidence:.2f}) -> [{rule.click_label}] "
-                                        f"({click_match.confidence:.2f})"
-                                    ),
-                                )
-                            last_click = now
-                            runtime.note(f"clicou regra {rule.index}")
-                        except (OSError, SerialException) as exc:
-                            print(f"Machine desconectada ({exc}). Reconectando...", flush=True)
-                            runtime.arduino_ok = False
-                            runtime.note("reconnect Machine...")
-                            try:
-                                arduino.close()
-                            except OSError:
-                                pass
-                            arduino = None
-                            active_port = ""
-                            arduino, active_port = find_machine(
-                                preferred_port, baud, scan_max, runtime
-                            )
-                            runtime.arduino_ok = arduino is not None
-                            next_rescan = time.monotonic() + rescan_every
+                        print(msg, flush=True)
+                        runtime.note(msg)
                         break
 
-                time.sleep(check_interval)
+                    try:
+                        if rule.click_template is None:
+                            send_click(
+                                arduino,
+                                click_match.center_x,
+                                click_match.center_y,
+                                monitor,
+                                (
+                                    f"Regra {rule.index}: [{rule.when_label}] "
+                                    f"({when_match.confidence:.2f}) -> clique na condicao"
+                                ),
+                            )
+                        else:
+                            send_click(
+                                arduino,
+                                click_match.center_x,
+                                click_match.center_y,
+                                monitor,
+                                (
+                                    f"Regra {rule.index}: [{rule.when_label}] "
+                                    f"({when_match.confidence:.2f}) -> [{rule.click_label}] "
+                                    f"({click_match.confidence:.2f})"
+                                ),
+                            )
+                        last_click = now
+                        runtime.note(f"clicou regra {rule.index}")
+                    except (OSError, SerialException) as exc:
+                        print(f"Machine desconectada ({exc}). Reconectando...", flush=True)
+                        runtime.arduino_ok = False
+                        runtime.note("reconnect Machine...")
+                        try:
+                            arduino.close()
+                        except OSError:
+                            pass
+                        arduino = None
+                        active_port = ""
+                        arduino, active_port = find_machine(
+                            preferred_port, baud, scan_max, runtime
+                        )
+                        runtime.arduino_ok = arduino is not None
+                        next_rescan = time.monotonic() + rescan_every
+                    break
+
+            time.sleep(check_interval)
     except KeyboardInterrupt:
         print("\nBot encerrado pelo usuario.", flush=True)
         runtime.note("encerrado")
     finally:
-        runtime.stop = True
+        # Nao seta runtime.stop aqui — deixa o worker reiniciar se caiu sozinho.
+        close_screenshotter(screenshotter)
         if arduino is not None:
             try:
                 arduino.close()
@@ -711,28 +805,52 @@ def bot_loop(config: dict[str, str], runtime: BotRuntime) -> int:
 
 
 def main() -> int:
+    enable_dpi_awareness()
     config = load_config()
     runtime = BotRuntime()
     use_ui = get_bool(config, "UI_ENABLED", True)
 
     if not use_ui:
-        try:
-            return bot_loop(config, runtime)
-        except KeyboardInterrupt:
-            print("\nBot encerrado pelo usuario.", flush=True)
-            return 0
+        while not runtime.stop:
+            try:
+                code = bot_loop(config, runtime)
+                if runtime.stop or code == 0:
+                    return 0 if runtime.stop else code
+                print(
+                    f"Loop saiu com codigo {code}. Reiniciando em {RESTART_DELAY_S:.0f}s...",
+                    flush=True,
+                )
+                runtime.note("reiniciando loop...")
+            except KeyboardInterrupt:
+                print("\nBot encerrado pelo usuario.", flush=True)
+                return 0
+            except Exception as exc:
+                print(f"ERRO no loop: {exc}. Reiniciando...", flush=True)
+                runtime.note(f"recupera: {exc}")
+            time.sleep(RESTART_DELAY_S)
+        return 0
 
     result: dict[str, int] = {"code": 0}
 
     def worker() -> None:
-        try:
-            result["code"] = bot_loop(config, runtime)
-        except Exception as exc:
-            print(f"ERRO inesperado no loop: {exc}", flush=True)
-            runtime.note(f"erro: {exc}")
-            result["code"] = 1
-        finally:
-            runtime.stop = True
+        while not runtime.stop:
+            try:
+                result["code"] = bot_loop(config, runtime)
+                if runtime.stop:
+                    break
+                print(
+                    f"Loop saiu (codigo {result['code']}). "
+                    f"Reiniciando em {RESTART_DELAY_S:.0f}s...",
+                    flush=True,
+                )
+                runtime.note("reiniciando loop...")
+            except Exception as exc:
+                print(f"ERRO inesperado no loop: {exc}", flush=True)
+                runtime.note(f"recupera: {exc}")
+                result["code"] = 1
+                if runtime.stop:
+                    break
+            time.sleep(RESTART_DELAY_S)
 
     thread = threading.Thread(target=worker, name="bot-loop", daemon=True)
     thread.start()

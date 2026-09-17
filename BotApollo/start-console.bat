@@ -21,6 +21,16 @@ if errorlevel 1 (
 )
 
 echo F8 liga/desliga. Feche pela interface ou Ctrl+C.
+echo Se cair com erro, reinicia sozinho apos 3s.
+
+:loop
 python main.py
-echo Saiu com codigo %ERRORLEVEL%.
-pause
+set EC=%ERRORLEVEL%
+if "%EC%"=="0" (
+    echo Saiu limpo.
+    pause
+    exit /b 0
+)
+echo Caiu com codigo %EC%. Reiniciando em 3s...
+timeout /t 3 /nobreak >nul
+goto loop

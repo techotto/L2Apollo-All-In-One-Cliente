@@ -1,5 +1,6 @@
 @echo off
-REM Robo - L2 Apollo — só a interface (sem VBS, sem instalar nada extra).
+REM Robo - L2 Apollo — interface sem console.
+REM Se o processo cair (exit != 0), reinicia sozinho apos 3s.
 REM Console/debug: start-console.bat
 
 cd /d "%~dp0"
@@ -13,9 +14,7 @@ if errorlevel 1 (
         pause
         exit /b 1
     )
-    start "" /B python "%~dp0main.py"
-) else (
-    start "" /B pythonw "%~dp0main.py"
 )
 
+start "" /MIN powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0restart-watch.ps1"
 exit /b 0
