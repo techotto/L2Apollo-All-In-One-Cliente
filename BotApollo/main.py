@@ -14,6 +14,7 @@ import serial
 from serial.serialutil import SerialException
 
 from overlay import BotOverlay, OverlayStatus
+from screen_capture import grab_game_window, grab_pil, grab_rect_gdi
 from win_focus import focus_game_window
 
 
@@ -24,8 +25,9 @@ DEFAULT_RULES_FILE = SCRIPT_DIR / "rules.conf"
 FIXED_FLAG = Path(r"C:\Users\Public\l2apollo.botapollo.fixed")
 MOUSE_SCALE = 32767
 CLICK_SELF = "@self"
-CAPTURE_RETRIES = 4
+CAPTURE_RETRIES = 3
 RESTART_DELAY_S = 3.0
+_CAPTURE_FAIL_NOTE_TS = 0.0
 
 
 def enable_dpi_awareness() -> None:
@@ -36,9 +38,13 @@ def enable_dpi_awareness() -> None:
         import ctypes
 
         try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            # Per-monitor v2 quando disponivel
+            ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
         except Exception:
-            ctypes.windll.user32.SetProcessDPIAware()
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except Exception:
+                ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
         pass
 
@@ -59,7 +65,17 @@ def close_screenshotter(screenshotter) -> None:
 def resolve_monitor(screenshotter, monitor_number: int) -> dict | None:
     if monitor_number < 1 or monitor_number >= len(screenshotter.monitors):
         return None
-    return screenshotter.monitors[monitor_number]
+    return dict(screenshotter.monitors[monitor_number])
+
+
+def _note_capture_fail(runtime: "BotRuntime", msg: str) -> None:
+    global _CAPTURE_FAIL_NOTE_TS
+    now = time.monotonic()
+    if now - _CAPTURE_FAIL_NOTE_TS < 5.0:
+        return
+    _CAPTURE_FAIL_NOTE_TS = now
+    print(f"AVISO: {msg}", flush=True)
+    runtime.note(msg)
 
 
 def grab_screen_bgr(
@@ -67,34 +83,64 @@ def grab_screen_bgr(
     monitor: dict,
     monitor_number: int,
     runtime: "BotRuntime",
+    game_title: str = "",
 ):
-    """Captura BGR; em BitBlt/ScreenShotError recria o mss e tenta de novo.
+    """1) mss/BitBlt → 2) GDI BitBlt → 3) PrintWindow do jogo → 4) Pillow.
 
-    Nunca propaga a falha — devolve (None, screenshotter, monitor) para o loop
-    seguir com Machine conectada.
+    Nunca derruba o loop/Machine. Devolve (bgr|None, screenshotter, monitor).
     """
-    last_err: Exception | None = None
+    last_err: Exception | str | None = None
+
+    # --- 1) mss (BitBlt) ---
     for attempt in range(1, CAPTURE_RETRIES + 1):
         try:
+            if screenshotter is None:
+                screenshotter = open_screenshotter()
+                monitor = resolve_monitor(screenshotter, monitor_number) or monitor
             raw = screenshotter.grab(monitor)
             shot = np.asarray(raw)
             if shot.ndim != 3 or shot.shape[2] < 3 or shot.size == 0:
-                raise RuntimeError("frame vazio/invalido")
+                raise RuntimeError("frame mss vazio")
             return cv2.cvtColor(shot, cv2.COLOR_BGRA2BGR), screenshotter, monitor
         except Exception as exc:
             last_err = exc
             close_screenshotter(screenshotter)
-            time.sleep(0.05 * attempt)
-            try:
-                screenshotter = open_screenshotter()
-                monitor = resolve_monitor(screenshotter, monitor_number) or monitor
-            except Exception as recreate_exc:
-                last_err = recreate_exc
-                screenshotter = None
+            screenshotter = None
+            time.sleep(0.04 * attempt)
 
-    msg = f"captura falhou ({last_err})"
-    print(f"AVISO: {msg} — retentando no proximo tick", flush=True)
-    runtime.note(msg)
+    # --- 2) GDI BitBlt direto na area do monitor ---
+    try:
+        gdi = grab_rect_gdi(
+            int(monitor["left"]),
+            int(monitor["top"]),
+            int(monitor["width"]),
+            int(monitor["height"]),
+        )
+        if gdi is not None and gdi.size > 0:
+            runtime.note("captura: fallback GDI")
+            return gdi, screenshotter, monitor
+    except Exception as exc:
+        last_err = exc
+
+    # --- 3) PrintWindow da janela do jogo ---
+    try:
+        win_img, win_mon = grab_game_window(game_title)
+        if win_img is not None and win_mon is not None:
+            runtime.note("captura: fallback janela")
+            return win_img, screenshotter, win_mon
+    except Exception as exc:
+        last_err = exc
+
+    # --- 4) Pillow ImageGrab (se tiver) ---
+    try:
+        pil = grab_pil(monitor)
+        if pil is not None and pil.size > 0:
+            runtime.note("captura: fallback PIL")
+            return pil, screenshotter, monitor
+    except Exception as exc:
+        last_err = exc
+
+    _note_capture_fail(runtime, f"captura falhou ({last_err})")
     if screenshotter is None:
         try:
             screenshotter = open_screenshotter()
@@ -712,7 +758,11 @@ def bot_loop(config: dict[str, str], runtime: BotRuntime) -> int:
                     continue
 
             screen, screenshotter, monitor = grab_screen_bgr(
-                screenshotter, monitor, monitor_number, runtime
+                screenshotter,
+                monitor,
+                monitor_number,
+                runtime,
+                game_title=game_title,
             )
             if screen is None:
                 time.sleep(check_interval)
