@@ -993,7 +993,19 @@ if __name__ == "__main__":
 
         atexit.register(_clear_pid)
 
-        sys.exit(main())
+        # Reinicia sozinho se cair (exit != 0). Sair limpo pela UI = 0.
+        while True:
+            code = 0
+            try:
+                code = int(main() or 0)
+            except Exception as exc:
+                print(f"ERRO inesperado: {exc}", flush=True)
+                code = 1
+            if code == 0:
+                sys.exit(0)
+            print(f"Caiu (codigo {code}). Reiniciando em {RESTART_DELAY_S:.0f}s...", flush=True)
+            time.sleep(RESTART_DELAY_S)
+            pid_path.write_text(str(os.getpid()), encoding="utf-8")
     except Exception as exc:
         print(f"ERRO inesperado: {exc}", flush=True)
         sys.exit(1)
