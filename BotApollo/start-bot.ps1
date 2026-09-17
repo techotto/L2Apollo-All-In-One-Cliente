@@ -16,25 +16,63 @@ function Write-Log([string]$msg) {
 }
 
 function Resolve-PythonExe {
-    $Prefer = @(
-        (Join-Path $env:LOCALAPPDATA "Python\bin\pythonw.exe"),
-        (Join-Path $env:LOCALAPPDATA "Python\bin\python.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\pythonw.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\pythonw.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\pythonw.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python311\pythonw.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python310\pythonw.exe")
+    # 1) where.exe = mesma resolucao do cmd (python no PATH do Windows)
+    foreach ($name in @("pythonw", "python", "py")) {
+        try {
+            $lines = & where.exe $name 2>$null
+        } catch {
+            $lines = $null
+        }
+        if (-not $lines) { continue }
+        foreach ($line in @($lines)) {
+            $src = [string]$line.Trim()
+            if (-not $src) { continue }
+            if ($src -match 'WindowsApps') { continue }
+            if (Test-Path -LiteralPath $src) { return $src }
+        }
+    }
+
+    # 2) Get-Command (pode achar fora do where)
+    foreach ($name in @("pythonw", "python", "py")) {
+        $all = @(Get-Command $name -All -ErrorAction SilentlyContinue)
+        foreach ($cmd in $all) {
+            $src = [string]$cmd.Source
+            if (-not $src -or ($src -match 'WindowsApps')) { continue }
+            if (Test-Path -LiteralPath $src) { return $src }
+        }
+    }
+
+    # 3) Pastas tipicas de instalacao
+    $roots = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python"),
+        (Join-Path $env:LOCALAPPDATA "Python"),
+        (Join-Path ${env:ProgramFiles} "Python*"),
+        (Join-Path ${env:ProgramFiles(x86)} "Python*")
     )
-    foreach ($p in $Prefer) {
-        if ($p -and (Test-Path -LiteralPath $p)) { return $p }
+    foreach ($rootPat in $roots) {
+        if (-not $rootPat) { continue }
+        $dirs = @()
+        try { $dirs = @(Get-Item -Path $rootPat -ErrorAction SilentlyContinue) } catch { }
+        foreach ($d in $dirs) {
+            foreach ($exe in @("pythonw.exe", "python.exe")) {
+                $candidate = Join-Path $d.FullName $exe
+                if (Test-Path -LiteralPath $candidate) { return $candidate }
+                $candidate2 = Join-Path $d.FullName (Join-Path "bin" $exe)
+                if (Test-Path -LiteralPath $candidate2) { return $candidate2 }
+            }
+        }
+        # Python3xx subdirs
+        if (Test-Path -LiteralPath (Split-Path $rootPat -Parent)) {
+            Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python") -Directory -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    foreach ($exe in @("pythonw.exe", "python.exe")) {
+                        $c = Join-Path $_.FullName $exe
+                        if (Test-Path -LiteralPath $c) { return $c }
+                    }
+                }
+        }
     }
-    foreach ($name in @("pythonw", "python")) {
-        $cmd = Get-Command $name -ErrorAction SilentlyContinue
-        if (-not $cmd) { continue }
-        $src = [string]$cmd.Source
-        if ($src -match 'WindowsApps') { continue }
-        if ($src -and (Test-Path -LiteralPath $src)) { return $src }
-    }
+
     return $null
 }
 
@@ -98,7 +136,7 @@ if (-not $py) {
     try {
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
-            "Python nao encontrado.`nInstale o Python (Add to PATH).`nNao use o stub da Microsoft Store.",
+            "Python nao encontrado no PATH.`nNo cmd, teste: python --version`nInstale o Python e marque Add to PATH.",
             "Robo - L2 Apollo", "OK", "Error"
         ) | Out-Null
     } catch { }
