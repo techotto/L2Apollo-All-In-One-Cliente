@@ -1,9 +1,6 @@
 # Config local do cliente - NAO versionar (cada um tem a sua)
 config/
 
-# BotApollo: porta COM / threshold locais do cliente
-BotApollo/config.conf
-
 # Licenca / runtime local
 helper.live
 hwid.local

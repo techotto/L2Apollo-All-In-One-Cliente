@@ -1,5 +1,6 @@
 ﻿# L2Apollo - atualizacao forcada do pacote cliente
-# Preserva: config\ + BotApollo\config.conf + keys.txt/token.txt/helper.live/hwid.local
+# Preserva: config\ + keys.txt/token.txt/helper.live/hwid.local
+# BotApollo\config.conf NAO preserva â€” sobrescreve com o do GitHub.
 # Sobrescreve: .enc, DLL, exe, runtime, bats, etc.
 $ErrorActionPreference = "Continue"
 $Root = $PSScriptRoot
@@ -118,27 +119,14 @@ function Stop-PidSafe([int]$procId, [string]$why) {
 }
 
 function Restore-ClientLocal {
-  param($Root, $cfg, $cfgDef, $cfgBak, $licBak, $botCfgBak, $encName)
-  Write-Step "[6/6] Restaurando sua config\ , BotApollo e licenca..."
+  param($Root, $cfg, $cfgDef, $cfgBak, $licBak, $encName)
+  Write-Step "[6/6] Restaurando sua config\ e licenca..."
   if (-not (Test-Path -LiteralPath $cfg)) { New-Item -ItemType Directory -Path $cfg -Force | Out-Null }
   if (Test-Path -LiteralPath $cfgBak) {
     Copy-Item -LiteralPath (Join-Path $cfgBak "*") -Destination $cfg -Recurse -Force -ErrorAction SilentlyContinue
     Write-Ok "config\ restaurada (seus INIs)"
   } else {
     Write-Info "(sem backup de config)"
-  }
-  $botDir = Join-Path $Root "BotApollo"
-  $botCfg = Join-Path $botDir "config.conf"
-  $botCfgEx = Join-Path $botDir "config.conf.example"
-  if (-not (Test-Path -LiteralPath $botDir)) {
-    New-Item -ItemType Directory -Path $botDir -Force | Out-Null
-  }
-  if ($botCfgBak -and (Test-Path -LiteralPath $botCfgBak)) {
-    Copy-Item -LiteralPath $botCfgBak -Destination $botCfg -Force
-    Write-Ok "BotApollo\config.conf restaurado (COM/threshold locais)"
-  } elseif (-not (Test-Path -LiteralPath $botCfg) -and (Test-Path -LiteralPath $botCfgEx)) {
-    Copy-Item -LiteralPath $botCfgEx -Destination $botCfg -Force
-    Write-Info "BotApollo\config.conf criado a partir do example"
   }
   foreach ($f in @("keys.txt", "token.txt", "helper.live", "hwid.local")) {
     $src = Join-Path $licBak $f
@@ -157,9 +145,6 @@ function Restore-ClientLocal {
   }
   Remove-Item -LiteralPath $cfgBak -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $licBak -Recurse -Force -ErrorAction SilentlyContinue
-  if ($botCfgBak -and (Test-Path -LiteralPath $botCfgBak)) {
-    Remove-Item -LiteralPath $botCfgBak -Force -ErrorAction SilentlyContinue
-  }
   $encOld = Join-Path $Root ($encName + ".old")
   if (Test-Path -LiteralPath $encOld) {
     Remove-Item -LiteralPath $encOld -Force -ErrorAction SilentlyContinue
@@ -191,13 +176,11 @@ if ($encBefore) {
   Write-Warn "$encName ainda nao existe nesta pasta"
 }
 
-Write-Step "[1/6] Salvando config\ , BotApollo\config.conf e licenca..."
+Write-Step "[1/6] Salvando config\ e licenca..."
 $cfg = Join-Path $Root "config"
 $cfgDef = Join-Path $Root "config.default"
 $cfgBak = Join-Path $env:TEMP ("l2apollo-config-bak-" + [guid]::NewGuid().ToString("N"))
 $licBak = Join-Path $env:TEMP ("l2apollo-lic-bak-" + [guid]::NewGuid().ToString("N"))
-$botCfg = Join-Path $Root "BotApollo\config.conf"
-$botCfgBak = Join-Path $env:TEMP ("l2apollo-botcfg-bak-" + [guid]::NewGuid().ToString("N") + ".conf")
 New-Item -ItemType Directory -Path $cfgBak -Force | Out-Null
 New-Item -ItemType Directory -Path $licBak -Force | Out-Null
 if (Test-Path -LiteralPath $cfg) {
@@ -206,13 +189,6 @@ if (Test-Path -LiteralPath $cfg) {
 } else {
   Write-Info "(ainda nao tinha config\)"
 }
-if (Test-Path -LiteralPath $botCfg) {
-  Copy-Item -LiteralPath $botCfg -Destination $botCfgBak -Force
-  Write-Ok "BotApollo\config.conf salvo em backup temporario"
-} else {
-  Write-Info "(ainda nao tinha BotApollo\config.conf)"
-  $botCfgBak = $null
-}
 foreach ($f in @("keys.txt", "token.txt", "helper.live", "hwid.local")) {
   $src = Join-Path $Root $f
   if (Test-Path -LiteralPath $src) {
@@ -220,6 +196,7 @@ foreach ($f in @("keys.txt", "token.txt", "helper.live", "hwid.local")) {
   }
 }
 Write-Ok "licenca (keys/token/helper/hwid) preservada"
+Write-Info "BotApollo\config.conf vem do GitHub (sera sobrescrito)"
 
 $script:UpdateOk = $false
 try {
@@ -340,7 +317,7 @@ try {
   Write-Err $_.Exception.Message
   $script:UpdateOk = $false
 } finally {
-  Restore-ClientLocal -Root $Root -cfg $cfg -cfgDef $cfgDef -cfgBak $cfgBak -licBak $licBak -botCfgBak $botCfgBak -encName $encName
+  Restore-ClientLocal -Root $Root -cfg $cfg -cfgDef $cfgDef -cfgBak $cfgBak -licBak $licBak -encName $encName
 }
 
 Write-Host ""
@@ -348,7 +325,7 @@ Write-Host "============================================================"
 if ($script:UpdateOk) {
   Write-Host "  SUCESSO - pacote igual ao GitHub." -ForegroundColor Green
   Write-Host "  Seus INIs em config\ foram mantidos." -ForegroundColor Green
-  Write-Host "  BotApollo\config.conf foi mantido." -ForegroundColor Green
+  Write-Host "  BotApollo\config.conf veio do GitHub (sobrescrito)." -ForegroundColor Green
   Write-Host ""
   Write-Host "  Agora: abra o .enc de novo no Adrenaline (F9)." -ForegroundColor White
   Write-Host "============================================================"
