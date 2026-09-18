@@ -50,7 +50,7 @@ def enable_dpi_awareness() -> None:
 
 
 def open_screenshotter():
-    return mss.mss()
+    return mss.MSS()
 
 
 def close_screenshotter(screenshotter) -> None:
@@ -368,12 +368,37 @@ def _port_looks_like_machine(description: str, hwid: str, manufacturer: str) -> 
         "ftdi",
         "usb serial",
         "usb-serial",
+        "serial usb",
+        "dispositivo serial",
         "leonardo",
         "promicro",
         "sparkfun",
         "cdc",
+        "vid:pid=2341",  # Arduino oficial (Leonardo etc.)
+        "vid_2341",
+        "2341:8036",
+        "2341:0036",
+        "vid:pid=1b4f",  # SparkFun
+        "vid:pid=2a03",  # Arduino.org
     )
     return any(n in blob for n in needles)
+
+
+def _com_info(port: str) -> tuple[str, str, str]:
+    try:
+        from serial.tools import list_ports
+
+        want = _normalize_com(port)
+        for info in list_ports.comports():
+            if _normalize_com(info.device or "") == want:
+                return (
+                    info.description or "",
+                    info.hwid or "",
+                    info.manufacturer or "",
+                )
+    except Exception:
+        pass
+    return "", "", ""
 
 
 def _banner_looks_like_machine(text: str) -> bool:
@@ -381,9 +406,29 @@ def _banner_looks_like_machine(text: str) -> bool:
     return ("pronto" in low) or ("arduino" in low) or ("mouse" in low and "teclado" in low)
 
 
+def list_arduino_like_ports() -> list[str]:
+    out: list[str] = []
+    try:
+        from serial.tools import list_ports
+
+        for info in list_ports.comports():
+            dev = _normalize_com(info.device or "")
+            if not dev:
+                continue
+            if _port_looks_like_machine(
+                info.description or "",
+                info.hwid or "",
+                info.manufacturer or "",
+            ):
+                out.append(dev)
+    except Exception:
+        pass
+    return out
+
+
 def list_candidate_com_ports(preferred: str, scan_max: int) -> list[str]:
     """
-    Ordem: porta preferida (se houver) -> COM1, COM2, COM3... ate SCAN_MAX.
+    Ordem: porta preferida -> portas Arduino/USB listadas pelo Windows -> COM1..N.
     """
     preferred_n = _normalize_com(preferred)
     auto = preferred_n in {"", "AUTO", "AUTODETECT", "SCAN"}
@@ -412,9 +457,15 @@ def list_candidate_com_ports(preferred: str, scan_max: int) -> list[str]:
     except Exception:
         pass
 
+    for port in list_arduino_like_ports():
+        add(port)
+
+    # Todas as COM que o Windows listou (AUTO precisa tentar mesmo sem nome "Arduino")
+    for port in sorted(existing, key=lambda p: int(p[3:]) if p.startswith("COM") and p[3:].isdigit() else 999):
+        add(port)
+
     for idx in range(1, max(1, scan_max) + 1):
         port = f"COM{idx}"
-        # Se o Windows listou portas, pula as que nao existem (mais rapido)
         if existing and port not in existing:
             continue
         add(port)
@@ -427,14 +478,17 @@ def list_candidate_com_ports(preferred: str, scan_max: int) -> list[str]:
 
 
 def probe_machine_port(port: str, baud: int) -> serial.Serial | None:
-    """Abre a porta e valida se parece a Machine (banner ou porta tipica)."""
+    """Abre a porta e valida se parece a Machine (banner ou porta tipica).
+
+    Levanta PermissionError se a COM estiver ocupada (Arduino IDE / outro Robo).
+    """
     ser: serial.Serial | None = None
     try:
-        ser = serial.Serial(port, baud, timeout=0.4)
-        # Leonardo/Pro Micro reinicia ao abrir serial
-        time.sleep(1.6)
+        ser = serial.Serial(port, baud, timeout=0.5)
+        # Leonardo/Pro Micro reinicia ao abrir serial — precisa esperar o banner
+        time.sleep(2.4)
         chunks: list[str] = []
-        deadline = time.monotonic() + 1.2
+        deadline = time.monotonic() + 1.5
         while time.monotonic() < deadline:
             waiting = ser.in_waiting
             if waiting:
@@ -450,40 +504,57 @@ def probe_machine_port(port: str, baud: int) -> serial.Serial | None:
             ser.timeout = 1
             return ser
 
-        # Sem banner: ainda aceita se a porta estiver listada como Arduino-like
+        desc, hwid, mfg = _com_info(port)
+        if _port_looks_like_machine(desc, hwid, mfg):
+            ser.timeout = 1
+            print(f"  {port}: sem banner, mas Windows marca Arduino/USB — aceitando.", flush=True)
+            return ser
+
+        # Notebooks: so aparece "Dispositivo serial USB" — se so tem 1 COM, e ela
+        ser.timeout = 1
         try:
             from serial.tools import list_ports
 
-            for info in list_ports.comports():
-                if _normalize_com(info.device or "") != _normalize_com(port):
-                    continue
-                if _port_looks_like_machine(
-                    info.description or "",
-                    info.hwid or "",
-                    info.manufacturer or "",
-                ):
-                    ser.timeout = 1
-                    return ser
+            listed = [p for p in list_ports.comports() if p.device]
+            if len(listed) == 1 and _normalize_com(listed[0].device or "") == _normalize_com(port):
+                print(f"  {port}: unica COM do sistema — aceitando.", flush=True)
+                return ser
         except Exception:
             pass
 
-        # Ultimo recurso: se abriu COM e nao deu erro, e so restou esta
-        # (quem chama decide). Aqui devolvemos None pra continuar o scan.
         ser.close()
         return None
-    except (OSError, SerialException, ValueError):
+    except PermissionError:
         if ser is not None:
             try:
                 ser.close()
             except Exception:
                 pass
+        raise
+    except (OSError, SerialException, ValueError) as exc:
+        msg = str(exc).lower()
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+        if "acesso negado" in msg or "permission" in msg or "busy" in msg:
+            raise PermissionError(str(exc)) from exc
         return None
 
 
-def _alert_machine_failed(scan_max: int) -> None:
+def _alert_machine_failed(scan_max: int, *, busy_ports: list[str] | None = None) -> None:
     try:
         import ctypes
 
+        extra = ""
+        if busy_ports:
+            ports = ", ".join(busy_ports)
+            extra = (
+                f"\n\nPorta(s) ocupada(s): {ports}\n"
+                f"Feche o Arduino IDE e qualquer outro Robo,\n"
+                f"depois abra o start.bat de novo."
+            )
         ctypes.windll.user32.MessageBoxW(
             0,
             (
@@ -491,6 +562,7 @@ def _alert_machine_failed(scan_max: int) -> None:
                 f"Varri COM1 ate COM{scan_max} e nenhuma respondeu.\n"
                 f"Conecte o cabo USB e reinicie o Robo, ou defina\n"
                 f"ARDUINO_PORT=COMx no config.conf."
+                f"{extra}"
             ),
             "Robo - L2 Apollo",
             0x10,  # MB_ICONERROR
@@ -512,6 +584,7 @@ def find_machine(
     preferred_n = _normalize_com(preferred)
     auto = preferred_n in {"", "AUTO", "AUTODETECT", "SCAN"}
     candidates = list_candidate_com_ports(preferred, scan_max)
+    busy_ports: list[str] = []
     print(
         f"Procurando Machine (Apollo) em {len(candidates)} porta(s) "
         f"(ate COM{scan_max})...",
@@ -526,7 +599,14 @@ def find_machine(
         if runtime is not None:
             runtime.note(f"testando {port}...")
         print(f"  Testando {port}...", flush=True)
-        found = probe_machine_port(port, baud)
+        try:
+            found = probe_machine_port(port, baud)
+        except PermissionError as exc:
+            busy_ports.append(port)
+            print(f"  {port} ocupada ({exc}). Feche o Arduino IDE.", flush=True)
+            if runtime is not None:
+                runtime.note(f"{port} ocupada")
+            continue
         if found is not None:
             print(f"Machine (Apollo) encontrada em {port}.", flush=True)
             if runtime is not None:
@@ -534,28 +614,46 @@ def find_machine(
                 runtime.note(f"Machine ok ({port})")
             return found, port
 
-    # Porta fixa no config: tenta abrir mesmo sem banner (compat).
+    # Fallback igual ao COM manual: so abre a porta (sem exigir banner).
+    # AUTO: tenta Arduino-like e depois as candidatas de novo.
+    fallback_ports: list[str] = []
     if not auto and preferred_n:
+        fallback_ports.append(preferred_n)
+    fallback_ports.extend(list_arduino_like_ports())
+    fallback_ports.extend(candidates)
+    seen_fb: set[str] = set()
+    for port in fallback_ports:
+        p = _normalize_com(port)
+        if not p or p in seen_fb or p in busy_ports:
+            continue
+        seen_fb.add(p)
         try:
+            print(f"  Fallback abrindo {p}...", flush=True)
             if runtime is not None:
-                runtime.note(f"abrindo {preferred_n}...")
-            ser = connect_arduino(preferred_n, baud, settle_s=1.8)
+                runtime.note(f"abrindo {p}...")
+            ser = connect_arduino(p, baud, settle_s=2.2)
             if runtime is not None:
                 runtime.machine_fail_alerted = False
-                runtime.note(f"Machine ok ({preferred_n})")
-            return ser, preferred_n
+                runtime.note(f"Machine ok ({p})")
+            print(f"Machine (Apollo) conectada em {p} (fallback).", flush=True)
+            return ser, p
         except (OSError, SerialException) as exc:
-            print(f"Falha em {preferred_n}: {exc}", flush=True)
+            print(f"  Falha em {p}: {exc}", flush=True)
+            msg = str(exc).lower()
+            if "acesso negado" in msg or "permission" in msg:
+                busy_ports.append(p)
 
     fail_msg = f"FALHOU: Machine nao achada ate COM{scan_max}"
+    if busy_ports:
+        fail_msg += f" (ocupada: {', '.join(busy_ports)})"
     print(fail_msg, flush=True)
     if runtime is not None:
         runtime.note(fail_msg)
         if not runtime.machine_fail_alerted:
             runtime.machine_fail_alerted = True
-            _alert_machine_failed(scan_max)
+            _alert_machine_failed(scan_max, busy_ports=busy_ports)
     else:
-        _alert_machine_failed(scan_max)
+        _alert_machine_failed(scan_max, busy_ports=busy_ports)
     return None, ""
 
 

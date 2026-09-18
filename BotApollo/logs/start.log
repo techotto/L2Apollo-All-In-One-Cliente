@@ -1,0 +1,6 @@
+﻿[2026-09-18 12:34:53] where hits: C:\Users\hugor\AppData\Local\Microsoft\WindowsApps\pythonw.exe | C:\Users\hugor\AppData\Local\Python\bin\pythonw.exe | C:\Users\hugor\AppData\Local\Microsoft\WindowsApps\python.exe | C:\Users\hugor\AppData\Local\Python\bin\python.exe | C:\Users\hugor\AppData\Local\Microsoft\WindowsApps\py.exe
+[2026-09-18 12:34:53] Kill anteriores...
+[2026-09-18 12:34:54] Python=C:\Users\hugor\AppData\Local\Python\bin\pythonw.exe
+[2026-09-18 12:34:54] Main=D:\Otto Tech\Projetos\L2Coyote\git\api-l2coyote\L2ApolloScripts\BotApollo\main.py
+[2026-09-18 12:34:54] Start args="D:\Otto Tech\Projetos\L2Coyote\git\api-l2coyote\L2ApolloScripts\BotApollo\main.py"
+[2026-09-18 12:34:54] OK PID=18160
