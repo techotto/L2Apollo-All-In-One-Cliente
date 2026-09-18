@@ -679,7 +679,7 @@ def bot_loop(config: dict[str, str], runtime: BotRuntime) -> int:
     monitor_number = get_int(config, "MONITOR", 1)
     focus_on_fixed = get_bool(config, "FOCUS_GAME_ON_FIXED", True)
     game_title = config.get("GAME_WINDOW_TITLE", "Lineage").strip()
-    maximize_game = get_bool(config, "GAME_WINDOW_MAXIMIZE", True)
+    maximize_game = get_bool(config, "GAME_WINDOW_MAXIMIZE", False)
 
     try:
         rules, mode_label = load_rules(config, default_threshold)

@@ -57,7 +57,7 @@ def focus_window(hwnd: int, *, maximize: bool = False) -> bool:
         return False
 
 
-def focus_game_window(title_substring: str, *, maximize: bool = True) -> bool:
+def focus_game_window(title_substring: str, *, maximize: bool = False) -> bool:
     hwnd = find_window_by_title(title_substring)
     if hwnd is None:
         return False
