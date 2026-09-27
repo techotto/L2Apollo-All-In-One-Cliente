@@ -1,0 +1,37 @@
+L2Apollo — Setup da maquina (cliente)
+=====================================
+
+O que faz
+---------
+1. Instala Git (winget: Git.Git)
+2. Instala Python 3 (tenta 3.13 → 3.12 → 3.11)
+3. Clona o repositorio do pacote cliente
+4. Roda pip install em BotApollo\requirements.txt
+
+Como usar (maquina nova)
+------------------------
+1. Copie ESTA pasta inteira (Setup-Cliente) pro PC do cliente
+   (pendrive, zip, WhatsApp — nao precisa ter o repo ainda)
+2. Botao direito em setup-maquina.bat → Executar como administrador
+3. Espere terminar
+4. Pasta padrao:
+   Documentos\L2Apollo-All-In-One-Cliente
+5. La dentro: instalar.bat (KEY) + L2Apollo.exe
+
+Opcoes (PowerShell)
+-------------------
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-maquina.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-maquina.ps1 -Dest "D:\Jogos\L2Apollo"
+
+-SkipGit / -SkipPython / -SkipClone / -SkipPip
+  pula etapas (se ja tiver instalado)
+
+Requisitos
+----------
+- Windows 10/11
+- winget (Instalador de App / App Installer da Microsoft Store)
+- Internet
+
+Repo clonado
+------------
+https://github.com/techotto/L2Apollo-All-In-One-Cliente.git

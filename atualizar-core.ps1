@@ -1,6 +1,6 @@
 ﻿# L2Apollo - atualizacao forcada do pacote cliente
 # Preserva: config\ + keys.txt/token.txt/helper.live/hwid.local
-# BotApollo\config.conf NAO preserva â€” sobrescreve com o do GitHub.
+# BotApollo\config.conf NAO preserva - sobrescreve com o do GitHub.
 # Sobrescreve: .enc, DLL, exe, runtime, bats, etc.
 $ErrorActionPreference = "Continue"
 $Root = $PSScriptRoot
