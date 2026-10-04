@@ -18,11 +18,10 @@ COMO OBTER / ATUALIZAR
 
 COMO INSTALAR
 1. Extraia/clone esta pasta em qualquer lugar (ex: Documentos\L2Apollo-Cliente)
-2. Rode L2Apollo.exe (ou mostrar-hwid.bat) e anote o HWID
-3. Envie ao suporte: seu HWID (4 caracteres hex)
-4. Receba sua KEY e rode instalar.bat (ou INSTALAR LICENCA no .exe)
-5. Inicie o Guard (bandeja / start_guard.bat)
-6. No Adrenaline, abra o .enc DESTA pasta e rode (F9)
+2. Rode atualizar.bat uma vez (grava a pasta do pacote para o script)
+3. No Adrenaline, abra o .enc DESTA pasta e rode (F9)
+4. No painel, preencha o CADASTRO (nome, e-mail, WhatsApp; KEY se ja tiver)
+5. Aguarde o suporte liberar - o script libera sozinho
 
 IMPORTANTE - BaseDir
 - O Guard grava o path do pacote em C:\Users\Public\l2apollo.path
@@ -31,9 +30,7 @@ IMPORTANTE - BaseDir
   C:\Users\Public\L2Apollo\L2Apollo-All-In-One\
 
 COMO USAR
-- Abra L2Apollo.exe para o painel de controle (se incluido)
-- OU use start_guard.bat para iniciar o Guard direto
-- O script L2Apollo-All-In-One.enc roda no Adrenaline
+- O script L2Apollo-All-In-One.enc roda no Adrenaline e abre o painel sozinho
 - O Guard precisa estar ativo (bandeja do Windows)
 
 CONFIGURACAO

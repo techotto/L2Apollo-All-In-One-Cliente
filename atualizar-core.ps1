@@ -312,6 +312,13 @@ try {
     Write-Ok "Atualizou: $before  ->  $after"
   }
 
+  try {
+    [System.IO.File]::WriteAllText("C:\Users\Public\l2apollo.path", $Root, [System.Text.Encoding]::ASCII)
+    Write-Ok "Pasta do pacote gravada em C:\Users\Public\l2apollo.path"
+  } catch {
+    Write-Warn "Nao consegui gravar C:\Users\Public\l2apollo.path"
+  }
+
   $script:UpdateOk = $ok
 } catch {
   Write-Err $_.Exception.Message

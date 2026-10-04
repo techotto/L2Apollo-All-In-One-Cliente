@@ -7,8 +7,4 @@ if exist "%~dp0config.default\" (
     if not exist "%~dp0config\%%~nxF" copy /Y "%%F" "%~dp0config\%%~nxF" >nul
   )
 )
-if exist "%~dp0L2Apollo.exe" (
-  start "" "%~dp0L2Apollo.exe" --guard
-) else (
-  start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0runtime\boot.ps1" -Action Guard
-)
+start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0runtime\boot.ps1" -Action Guard

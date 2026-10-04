@@ -275,15 +275,20 @@ try {
         Ensure-PipDeps $target $pythonExe | Out-Null
     }
 
+    if (Test-Path -LiteralPath $target) {
+        [System.IO.File]::WriteAllText("C:\Users\Public\l2apollo.path", $target, [System.Text.Encoding]::ASCII)
+        Write-Ok "Pasta do pacote gravada em C:\Users\Public\l2apollo.path"
+    }
+
     Write-Host ""
     Write-Host "============================================================" -ForegroundColor Green
     Write-Host "  PRONTO" -ForegroundColor Green
     Write-Host "============================================================" -ForegroundColor Green
     Write-Info ("Pasta do cliente: " + $target)
     Write-Info "Proximos passos:"
-    Write-Info "  1) Abra L2Apollo.exe"
-    Write-Info "  2) Rode instalar.bat com a KEY do suporte"
-    Write-Info "  3) Abra o .enc no Adrenaline"
+    Write-Info "  1) Abra o .enc desta pasta no Adrenaline (F9)"
+    Write-Info "  2) No painel, preencha o CADASTRO"
+    Write-Info "  3) Aguarde o suporte liberar"
     Write-Host ""
 }
 catch {

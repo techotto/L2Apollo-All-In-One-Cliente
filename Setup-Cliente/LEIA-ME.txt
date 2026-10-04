@@ -16,7 +16,7 @@ Como usar (maquina nova)
 3. Espere terminar
 4. Pasta padrao:
    Documentos\L2Apollo-All-In-One-Cliente
-5. La dentro: instalar.bat (KEY) + L2Apollo.exe
+5. Abra o .enc dessa pasta no Adrenaline e preencha o CADASTRO no painel
 
 Opcoes (PowerShell)
 -------------------
