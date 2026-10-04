@@ -128,7 +128,7 @@ function Restore-ClientLocal {
   } else {
     Write-Info "(sem backup de config)"
   }
-  foreach ($f in @("keys.txt", "token.txt", "helper.live", "hwid.local")) {
+  foreach ($f in @("keys.txt", "token.txt", "helper.live", "hwid.local", "cadastro.txt", "cadastro.ok")) {
     $src = Join-Path $licBak $f
     if (Test-Path -LiteralPath $src) {
       Copy-Item -LiteralPath $src -Destination (Join-Path $Root $f) -Force
@@ -189,7 +189,7 @@ if (Test-Path -LiteralPath $cfg) {
 } else {
   Write-Info "(ainda nao tinha config\)"
 }
-foreach ($f in @("keys.txt", "token.txt", "helper.live", "hwid.local")) {
+foreach ($f in @("keys.txt", "token.txt", "helper.live", "hwid.local", "cadastro.txt", "cadastro.ok")) {
   $src = Join-Path $Root $f
   if (Test-Path -LiteralPath $src) {
     Copy-Item -LiteralPath $src -Destination (Join-Path $licBak $f) -Force

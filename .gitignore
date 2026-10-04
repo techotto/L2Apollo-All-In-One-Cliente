@@ -6,4 +6,6 @@ helper.live
 hwid.local
 keys.txt
 token.txt
+cadastro.txt
+cadastro.ok
 *.remote
