@@ -17,7 +17,7 @@ pause
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0runtime\boot.ps1" -Action RevealBinHwid
 if errorlevel 1 (
   echo.
-  echo [ERRO] Falhou. Verifique se existe .enc na pasta.
+  echo [ERRO] Falhou. Verifique se existe .bin na pasta.
   pause
   exit /b 1
 )

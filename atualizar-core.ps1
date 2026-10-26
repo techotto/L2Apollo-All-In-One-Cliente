@@ -1,7 +1,7 @@
 ﻿# L2Apollo - atualizacao forcada do pacote cliente
 # Preserva: config\ + keys.txt/token.txt/helper.live/hwid.local
 # BotApollo\config.conf NAO preserva - sobrescreve com o do GitHub.
-# Sobrescreve: .enc, DLL, exe, runtime, bats, etc.
+# Sobrescreve: .bin, DLL, exe, runtime, bats, etc.
 $ErrorActionPreference = "Continue"
 $Root = $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $MyInvocation.MyCommand.Path }
@@ -13,13 +13,13 @@ function Write-Info([string]$msg) { Write-Host "  $msg" -ForegroundColor Gray }
 function Write-Warn([string]$msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
 function Write-Err([string]$msg)  { Write-Host "  [ERRO] $msg" -ForegroundColor Red }
 
-$encName = $null
-Get-ChildItem -LiteralPath $Root -Filter "*.enc" -File -ErrorAction SilentlyContinue |
-  Select-Object -First 1 | ForEach-Object { $encName = $_.Name }
-if (-not $encName) { $encName = "L2Apollo-All-In-One.enc" }
+$binName = $null
+Get-ChildItem -LiteralPath $Root -Filter "*.bin" -File -ErrorAction SilentlyContinue |
+  Select-Object -First 1 | ForEach-Object { $binName = $_.Name }
+if (-not $binName) { $binName = "L2Apollo-All-In-One.bin" }
 
 $trackedHot = @(
-  $encName,
+  $binName,
   "L2ApolloPanel.dll",
   "L2Apollo.exe",
   "L2ApolloPanel.exe",
@@ -119,7 +119,7 @@ function Stop-PidSafe([int]$procId, [string]$why) {
 }
 
 function Restore-ClientLocal {
-  param($Root, $cfg, $cfgDef, $cfgBak, $licBak, $encName)
+  param($Root, $cfg, $cfgDef, $cfgBak, $licBak, $binName)
   Write-Step "[6/6] Restaurando sua config\ e licenca..."
   if (-not (Test-Path -LiteralPath $cfg)) { New-Item -ItemType Directory -Path $cfg -Force | Out-Null }
   if (Test-Path -LiteralPath $cfgBak) {
@@ -145,9 +145,9 @@ function Restore-ClientLocal {
   }
   Remove-Item -LiteralPath $cfgBak -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $licBak -Recurse -Force -ErrorAction SilentlyContinue
-  $encOld = Join-Path $Root ($encName + ".old")
-  if (Test-Path -LiteralPath $encOld) {
-    Remove-Item -LiteralPath $encOld -Force -ErrorAction SilentlyContinue
+  $binOld = Join-Path $Root ($binName + ".old")
+  if (Test-Path -LiteralPath $binOld) {
+    Remove-Item -LiteralPath $binOld -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -168,12 +168,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $Root ".git"))) {
 }
 
 $before = (& git -C $Root rev-parse --short HEAD 2>$null)
-$encBefore = Get-Item -LiteralPath (Join-Path $Root $encName) -ErrorAction SilentlyContinue
+$binBefore = Get-Item -LiteralPath (Join-Path $Root $binName) -ErrorAction SilentlyContinue
 Write-Info ("Commit atual: " + $(if ($before) { $before } else { "?" }))
-if ($encBefore) {
-  Write-Info ("$encName : {0:N0} bytes  {1}" -f $encBefore.Length, $encBefore.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss"))
+if ($binBefore) {
+  Write-Info ("$binName : {0:N0} bytes  {1}" -f $binBefore.Length, $binBefore.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss"))
 } else {
-  Write-Warn "$encName ainda nao existe nesta pasta"
+  Write-Warn "$binName ainda nao existe nesta pasta"
 }
 
 Write-Step "[1/6] Salvando config\ e licenca..."
@@ -200,7 +200,7 @@ Write-Info "BotApollo\config.conf vem do GitHub (sera sobrescrito)"
 
 $script:UpdateOk = $false
 try {
-  Write-Step "[2/6] Detectando processos que travam .enc / DLL / exe..."
+  Write-Step "[2/6] Detectando processos que travam .bin / DLL / exe..."
   $killed = 0
   $lockerPids = @(Get-LockingPids $trackedHot)
   if ($lockerPids.Count -eq 0) {
@@ -226,20 +226,20 @@ try {
   Start-Sleep -Seconds 1
   Write-Ok ("Processos encerrados nesta rodada: $killed")
 
-  $encPath = Join-Path $Root $encName
-  if (Test-Path -LiteralPath $encPath) {
+  $binPath = Join-Path $Root $binName
+  if (Test-Path -LiteralPath $binPath) {
     try {
-      $fs = [System.IO.File]::Open($encPath, "Open", "ReadWrite", "None")
+      $fs = [System.IO.File]::Open($binPath, "Open", "ReadWrite", "None")
       $fs.Close()
     } catch {
-      Write-Warn "$encName ainda parece travado - tentando renomear para .old"
+      Write-Warn "$binName ainda parece travado - tentando renomear para .old"
       try {
-        $old = $encPath + ".old"
+        $old = $binPath + ".old"
         if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue }
-        Rename-Item -LiteralPath $encPath -NewName ($encName + ".old") -Force -ErrorAction Stop
-        Write-Ok "renomeado para $encName.old (sera substituido pelo GitHub)"
+        Rename-Item -LiteralPath $binPath -NewName ($binName + ".old") -Force -ErrorAction Stop
+        Write-Ok "renomeado para $binName.old (sera substituido pelo GitHub)"
       } catch {
-        Write-Err "Nao consegui liberar $encName. Feche o Adrenaline manualmente e rode de novo."
+        Write-Err "Nao consegui liberar $binName. Feche o Adrenaline manualmente e rode de novo."
         Write-Err $_.Exception.Message
       }
     }
@@ -277,7 +277,7 @@ try {
   $after = (& git -C $Root rev-parse --short HEAD 2>$null)
   $afterFull = (& git -C $Root rev-parse HEAD 2>$null)
   $remoteFull = (& git -C $Root rev-parse origin/main 2>$null)
-  $encAfter = Get-Item -LiteralPath (Join-Path $Root $encName) -ErrorAction SilentlyContinue
+  $binAfter = Get-Item -LiteralPath (Join-Path $Root $binName) -ErrorAction SilentlyContinue
   $dllAfter = Get-Item -LiteralPath (Join-Path $Root "L2ApolloPanel.dll") -ErrorAction SilentlyContinue
 
   $ok = $true
@@ -288,15 +288,15 @@ try {
     Write-Ok "Commit local = GitHub ($after)"
   }
 
-  if ($encAfter) {
-    Write-Ok ("$encName : {0:N0} bytes  {1}" -f $encAfter.Length, $encAfter.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss"))
-    if ($encBefore -and $before -ne $after -and $encBefore.Length -eq $encAfter.Length -and $encBefore.LastWriteTime -eq $encAfter.LastWriteTime) {
-      Write-Warn "Tamanho/data do .enc iguais ao anterior - pode ter ficado travado."
+  if ($binAfter) {
+    Write-Ok ("$binName : {0:N0} bytes  {1}" -f $binAfter.Length, $binAfter.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss"))
+    if ($binBefore -and $before -ne $after -and $binBefore.Length -eq $binAfter.Length -and $binBefore.LastWriteTime -eq $binAfter.LastWriteTime) {
+      Write-Warn "Tamanho/data do .bin iguais ao anterior - pode ter ficado travado."
       Write-Warn "Feche o Adrenaline e rode de novo."
       $ok = $false
     }
   } else {
-    Write-Err "$encName NAO encontrado apos update"
+    Write-Err "$binName NAO encontrado apos update"
     $ok = $false
   }
 
@@ -324,7 +324,7 @@ try {
   Write-Err $_.Exception.Message
   $script:UpdateOk = $false
 } finally {
-  Restore-ClientLocal -Root $Root -cfg $cfg -cfgDef $cfgDef -cfgBak $cfgBak -licBak $licBak -encName $encName
+  Restore-ClientLocal -Root $Root -cfg $cfg -cfgDef $cfgDef -cfgBak $cfgBak -licBak $licBak -binName $binName
 }
 
 Write-Host ""
@@ -334,7 +334,7 @@ if ($script:UpdateOk) {
   Write-Host "  Seus INIs em config\ foram mantidos." -ForegroundColor Green
   Write-Host "  BotApollo\config.conf veio do GitHub (sobrescrito)." -ForegroundColor Green
   Write-Host ""
-  Write-Host "  Agora: abra o .enc de novo no Adrenaline (F9)." -ForegroundColor White
+  Write-Host "  Agora: abra o .bin de novo no Adrenaline (Start)." -ForegroundColor White
   Write-Host "============================================================"
   exit 0
 } else {

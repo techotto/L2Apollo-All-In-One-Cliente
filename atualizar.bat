@@ -9,7 +9,7 @@ echo   L2 APOLLO - Atualizar
 echo ============================================================
 echo.
 echo  Pasta: %CD%
-echo  Vai: achar quem trava .enc/DLL, matar, baixar GitHub,
+echo  Vai: achar quem trava .bin/DLL, matar, baixar GitHub,
 echo       sobrescrever TUDO menos config\ + licenca.
 echo       (BotApollo\config.conf VEM do GitHub e sobrescreve)
 echo  A janela NAO fecha sozinha.

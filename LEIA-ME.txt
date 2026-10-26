@@ -9,9 +9,9 @@ MAQUINA NOVA (Git + Python + clone)
 COMO OBTER / ATUALIZAR
 - Clone: git clone https://github.com/techotto/L2Apollo-All-In-One-Cliente.git
 - Atualizar: SO atualizar.bat (dois cliques). NAO use git pull
-- O bat detecta quem trava .enc/DLL, mata o processo e sobrescreve o pacote
+- O bat detecta quem trava .bin/DLL, mata o processo e sobrescreve o pacote
 - PRESERVA config\ + keys/token/helper
-- Mostra SUCESSO ou FALHOU no final (commit, tamanho do .enc)
+- Mostra SUCESSO ou FALHOU no final (commit, tamanho do .bin, VERSION.txt)
 - config\ e local; defaults do pacote ficam em config.default\
 - BotApollo\config.conf SOBE no git e SOBRESCREVE no update
 - Se veio em ZIP: baixe o ZIP novo e substitua a pasta (faca backup do config\)
@@ -19,7 +19,7 @@ COMO OBTER / ATUALIZAR
 COMO INSTALAR
 1. Extraia/clone esta pasta em qualquer lugar (ex: Documentos\L2Apollo-Cliente)
 2. Rode atualizar.bat uma vez (grava a pasta do pacote para o script)
-3. No Adrenaline, abra o .enc DESTA pasta e rode (F9)
+3. No Adrenaline, abra o .bin DESTA pasta e rode (Start)
 4. No painel, preencha o CADASTRO (nome, e-mail, WhatsApp; KEY se ja tiver)
 5. Aguarde o suporte liberar - o script libera sozinho
 
@@ -30,7 +30,7 @@ IMPORTANTE - BaseDir
   C:\Users\Public\L2Apollo\L2Apollo-All-In-One\
 
 COMO USAR
-- O script L2Apollo-All-In-One.enc roda no Adrenaline e abre o painel sozinho
+- O script L2Apollo-All-In-One.bin (versao 1.01) roda no Adrenaline e abre o painel sozinho
 - O Guard precisa estar ativo (bandeja do Windows)
 
 CONFIGURACAO

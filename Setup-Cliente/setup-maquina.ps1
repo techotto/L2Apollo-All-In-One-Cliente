@@ -286,7 +286,7 @@ try {
     Write-Host "============================================================" -ForegroundColor Green
     Write-Info ("Pasta do cliente: " + $target)
     Write-Info "Proximos passos:"
-    Write-Info "  1) Abra o .enc desta pasta no Adrenaline (F9)"
+    Write-Info "  1) Abra o .bin desta pasta no Adrenaline (Start)"
     Write-Info "  2) No painel, preencha o CADASTRO"
     Write-Info "  3) Aguarde o suporte liberar"
     Write-Host ""
