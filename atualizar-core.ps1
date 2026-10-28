@@ -328,7 +328,7 @@ try {
 }
 
 Write-Host ""
-Write-Host "============================================================"
+Write-Host "============================================================="
 if ($script:UpdateOk) {
   Write-Host "  SUCESSO - pacote igual ao GitHub." -ForegroundColor Green
   Write-Host "  Seus INIs em config\ foram mantidos." -ForegroundColor Green
