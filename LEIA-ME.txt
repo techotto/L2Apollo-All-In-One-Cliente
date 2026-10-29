@@ -30,7 +30,7 @@ IMPORTANTE - BaseDir
   C:\Users\Public\L2Apollo\L2Apollo-All-In-One\
 
 COMO USAR
-- O script L2Apollo-All-In-One.bin (versao 1.05) roda no Adrenaline e abre o painel sozinho
+- O script L2Apollo-All-In-One.bin (versao 1.06) roda no Adrenaline e abre o painel sozinho
 - O Guard precisa estar ativo (bandeja do Windows)
 
 CONFIGURACAO
