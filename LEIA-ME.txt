@@ -29,12 +29,15 @@ IMPORTANTE - BaseDir
 - Alternativa: copie o pacote para
   C:\Users\Public\L2Apollo\L2Apollo-All-In-One\
 
-COMO USAR
-- O script L2Apollo-All-In-One.bin (versao 1.82) roda no Adrenaline e abre o painel sozinho
+COMO USAR (Manager-equal - 2 contas no Adrenaline)
+- Conta 1 (Relog): rode L2Apollo-All-In-One.bin (versao 1.83) - entry Auto Relog
+- Conta 2 (Farm): o entry sobe sozinho o L2Apollo-Core.bin no Iniciar
+- Precisa de 2 entradas na lista Accounts (a 2a pode ficar Off)
 - O Guard precisa estar ativo (bandeja do Windows)
 
 CONFIGURACAO
 - Edite os arquivos .ini na pasta config\ conforme necessario
+- Auto Relog: config\perfis\<nome>\autorelog.ini (local, nunca CDN)
 - config\ e sua (local). Defaults do pacote: config.default\
 - Ao atualizar, seus INIs NAO sao sobrescritos
 - Ao atualizar, BotApollo\config.conf E sobrescrito (vem do GitHub)
@@ -46,3 +49,4 @@ IMPORTANTE
 - Nao altere a pasta runtime
 - Sem KEY valida o script nao funciona
 - Nao compartilhe sua KEY
+- Entry + Core sobem juntos no update (mesmo VERSION)
