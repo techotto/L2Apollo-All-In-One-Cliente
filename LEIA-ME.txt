@@ -30,7 +30,7 @@ IMPORTANTE - BaseDir
   C:\Users\Public\L2Apollo\L2Apollo-All-In-One\
 
 COMO USAR (Manager-equal - 2 contas no Adrenaline)
-- Conta 1 (Relog): rode L2Apollo-All-In-One.bin (versao 1.89) - entry Auto Relog
+- Conta 1 (Relog): rode L2Apollo-All-In-One.bin (versao 1.90) - entry Auto Relog
 - Conta 2 (Farm): o entry sobe sozinho o L2Apollo-Core.bin no Iniciar
 - Precisa de 2 entradas na lista Accounts (a 2a pode ficar Off)
 - O Guard precisa estar ativo (bandeja do Windows)
