@@ -7,5 +7,14 @@
     "ipcSlug": "allinone",
     "hasConfigs": true,
     "clientGitUrl": "https://github.com/techotto/L2Apollo-All-In-One-Cliente.git"
+  },
+  {
+    "id": "l2ApolloMA",
+    "label": "L2Apollo — MA (Assist Lead)",
+    "folder": "L2Apollo-All-In-One",
+    "binPrefix": "LApolloMA",
+    "ipcSlug": "ma",
+    "hasConfigs": true,
+    "scriptFile": "ApolloMA"
   }
 ]

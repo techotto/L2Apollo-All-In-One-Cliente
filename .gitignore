@@ -1,11 +1,27 @@
 # Config local do cliente - NAO versionar (cada um tem a sua)
 config/
 
+# NUNCA versionar fonte ? entregavel so .bin
+*.pas
+*.debug.pas
+*.map
+*.sym.map
+*.pas.map
+
 # Licenca / runtime local
 helper.live
 hwid.local
 keys.txt
 token.txt
+token.ma.txt
 cadastro.txt
+cadastro.ma.txt
 cadastro.ok
+cadastro.ma.ok
 *.remote
+
+# Runtime local BotApollo
+BotApollo/logs/
+BotApollo/__pycache__/
+*.pyc
+
