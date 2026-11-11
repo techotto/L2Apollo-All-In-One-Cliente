@@ -20,7 +20,6 @@ cadastro.ok
 cadastro.ma.ok
 *.remote
 
-# Runtime local BotApollo
 BotApollo/logs/
 BotApollo/__pycache__/
 *.pyc
