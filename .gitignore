@@ -19,8 +19,3 @@ cadastro.ma.txt
 cadastro.ok
 cadastro.ma.ok
 *.remote
-
-BotApollo/logs/
-BotApollo/__pycache__/
-*.pyc
-
