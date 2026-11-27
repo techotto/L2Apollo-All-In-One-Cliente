@@ -77,3 +77,9 @@
 [2026-11-19 01:47:44] Main=D:\ApolloScript\api-l2coyote\L2ApolloScripts\BotApollo\main.py
 [2026-11-19 01:47:44] Start args="D:\ApolloScript\api-l2coyote\L2ApolloScripts\BotApollo\main.py"
 [2026-11-19 01:47:44] OK PID=32588
+[2026-11-26 19:14:14] where hits: C:\Users\hugor\AppData\Local\Microsoft\WindowsApps\pythonw.exe | C:\Users\hugor\AppData\Local\Python\bin\pythonw.exe | C:\Users\hugor\AppData\Local\Microsoft\WindowsApps\python.exe | C:\Users\hugor\AppData\Local\Python\bin\python.exe | C:\Users\hugor\AppData\Local\Microsoft\WindowsApps\py.exe
+[2026-11-26 19:14:14] Kill anteriores...
+[2026-11-26 19:14:15] Python=C:\Users\hugor\AppData\Local\Python\bin\pythonw.exe
+[2026-11-26 19:14:15] Main=D:\ApolloScript\api-l2coyote\L2ApolloScripts\BotApollo\main.py
+[2026-11-26 19:14:15] Start args="D:\ApolloScript\api-l2coyote\L2ApolloScripts\BotApollo\main.py"
+[2026-11-26 19:14:15] OK PID=28164
